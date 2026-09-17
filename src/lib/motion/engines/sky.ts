@@ -196,6 +196,11 @@ export class SkyEngine implements Engine {
 		ctx.textBaseline = 'top';
 
 		for (let y = 0; y < this.rows; y++) {
+			// E4 (perf): batch one string per distinct color key for this row —
+			// exactly like the legacy `Sky.prototype.draw`'s `used[key]` row
+			// buffers — instead of one fillStyle+fillText call per cell. Draw
+			// calls end up bounded by rows x distinct colors, not cell count.
+			const rowBatches = new Map<string, string[]>();
 			const birdY = ((y + 0.5) * this.ch - this.bird.ay) / this.bird.S;
 			for (let x = 0; x < this.cols; x++) {
 				const birdX = ((x + 0.5) * this.cw - this.bird.ax) / this.bird.S;
@@ -245,8 +250,20 @@ export class SkyEngine implements Engine {
 					}
 				}
 
-				ctx.fillStyle = resolveSkyColor(colorKey, this.tokens);
-				ctx.fillText(glyph, x * this.cw, y * this.ch);
+				let batch = rowBatches.get(colorKey);
+				if (!batch) {
+					batch = new Array<string>(this.cols).fill(' ');
+					rowBatches.set(colorKey, batch);
+				}
+				batch[x] = glyph;
+			}
+
+			for (const [colorKey, batch] of rowBatches) {
+				ctx.fillStyle = resolveSkyColor(
+					colorKey as Parameters<typeof resolveSkyColor>[0],
+					this.tokens
+				);
+				ctx.fillText(batch.join(''), 0, y * this.ch);
 			}
 		}
 	}
