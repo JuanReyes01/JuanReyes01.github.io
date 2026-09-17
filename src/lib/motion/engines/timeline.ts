@@ -94,10 +94,16 @@ export class TimelineEngine implements Engine {
 		const height = this.layout.rows * this.ch;
 		this.canvas.style.height = `${height}px`;
 
+		// Assigning canvas.width/height resets the whole 2D context — including
+		// `font` — back to its defaults, so `font` must be re-set AFTER this,
+		// on every resize, exactly like the sky engine does (E1: this used to
+		// never be set at all, silently falling back to the browser default
+		// sans-serif font at the default size).
 		const dpr = devicePixelRatioCapped();
 		this.canvas.width = Math.round(width * dpr);
 		this.canvas.height = Math.round(height * dpr);
 		this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+		this.ctx.font = `${fontSize}px "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace`;
 	}
 
 	setTheme(tokens: Tokens): void {
