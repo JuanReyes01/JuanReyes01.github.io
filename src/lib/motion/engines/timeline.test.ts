@@ -99,10 +99,51 @@ describe('TimelineEngine', () => {
 
 	it('is not settled mid-intro and settles once the 6s intro finishes', () => {
 		const { engine } = makeEngine({ reduced: false });
+		engine.setVisibility(true, 0.5); // E2: the intro only starts once visible
 		engine.draw(0);
 		expect(engine.isSettled()).toBe(false);
 		engine.draw(6000);
 		expect(engine.isSettled()).toBe(true);
+	});
+
+	it('does not start the intro until the visibility ratio reaches >= 0.5 for the first time (E2)', () => {
+		const { engine } = makeEngine({ reduced: false });
+		engine.draw(0); // never became visible — stays parked, not mid-intro
+		expect(engine.isSettled()).toBe(true);
+		engine.draw(3000);
+		expect(engine.isSettled()).toBe(true);
+
+		engine.setVisibility(true, 0.4); // below the 0.5 threshold — still not enough
+		engine.draw(3016);
+		expect(engine.isSettled()).toBe(true);
+
+		engine.setVisibility(true, 0.5); // crosses the threshold — intro starts now
+		engine.draw(3032);
+		expect(engine.isSettled()).toBe(false);
+	});
+
+	it('never plays if it never becomes visible (E2)', () => {
+		const { engine } = makeEngine({ reduced: false });
+		for (let now = 0; now <= 6000; now += 1000) engine.draw(now);
+		expect(engine.isSettled()).toBe(true);
+	});
+
+	it('plays the intro only once even if visibility flickers after it started (E2)', () => {
+		const { engine } = makeEngine({ reduced: false });
+		engine.setVisibility(true, 0.6);
+		engine.draw(0);
+		expect(engine.isSettled()).toBe(false);
+		engine.setVisibility(false, 0);
+		engine.setVisibility(true, 0.6);
+		engine.draw(6000);
+		expect(engine.isSettled()).toBe(true); // finished the same 6s intro, not restarted
+	});
+
+	it('parks at HEAD immediately under reduced motion even if it never becomes visible (E2)', () => {
+		const { engine, onReadout } = makeEngine({ reduced: true });
+		engine.draw(0); // no setVisibility() call at all
+		expect(engine.isSettled()).toBe(true);
+		expect(onReadout.mock.calls[0][0].text).toBe('Milestone'); // parked at HEAD, not month 0
 	});
 
 	it('fires onReadout only when the displayed month actually changes', () => {
@@ -127,6 +168,17 @@ describe('TimelineEngine', () => {
 		expect(engine.isSettled()).toBe(true);
 	});
 
+	it('key() and release() also wake the scheduler, same as scrub() (E3 — feedback renders after the intro settled)', () => {
+		const { engine, wake } = makeEngine({ reduced: true });
+		engine.draw(0); // settle at HEAD first
+		wake.mockClear();
+		engine.key('ArrowLeft');
+		expect(wake).toHaveBeenCalled();
+		wake.mockClear();
+		engine.release();
+		expect(wake).toHaveBeenCalled();
+	});
+
 	it('setFocusLane(id) scrubs to that lane’s start month', () => {
 		const { engine, onReadout } = makeEngine({ reduced: true });
 		engine.draw(0);
@@ -145,6 +197,7 @@ describe('TimelineEngine', () => {
 
 	it('setReduced(true) mid-flight parks the timeline at HEAD', () => {
 		const { engine } = makeEngine({ reduced: false });
+		engine.setVisibility(true, 0.5); // E2: the intro only starts once visible
 		engine.draw(0);
 		expect(engine.isSettled()).toBe(false);
 		engine.setReduced(true);

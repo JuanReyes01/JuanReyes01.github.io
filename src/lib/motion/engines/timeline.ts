@@ -54,6 +54,10 @@ export class TimelineEngine implements Engine {
 	private state: Playback;
 	private settled = true;
 	private hasEntered = false;
+	/** Set once the IntersectionObserver ratio reaches >= 0.5 for the first
+	 * time (E2/design D15: "the first time ≥50% is visible"). Reduced motion
+	 * bypasses this — it parks at HEAD immediately regardless of visibility. */
+	private hasBeenHalfVisible = false;
 	private lastMonth = -1;
 
 	constructor(opts: TimelineEngineOptions) {
@@ -108,6 +112,14 @@ export class TimelineEngine implements Engine {
 		}
 	}
 
+	/** IntersectionObserver report (E2): gates when the intro is allowed to
+	 * start. `visible` itself isn't needed here — the shared scheduler's
+	 * boolean visibility already stops `draw()` from being called at all
+	 * while off-screen; only the finer 0.5 ratio matters to this engine. */
+	setVisibility(_visible: boolean, ratio: number): void {
+		if (ratio >= 0.5) this.hasBeenHalfVisible = true;
+	}
+
 	isSettled(): boolean {
 		return this.settled;
 	}
@@ -154,7 +166,10 @@ export class TimelineEngine implements Engine {
 	}
 
 	draw(now: number): void {
-		if (!this.hasEntered) {
+		// E2: the intro only starts once the timeline has been at least 50%
+		// visible; if it never becomes visible, it never plays. Reduced
+		// motion is exempt — it parks at HEAD immediately either way.
+		if (!this.hasEntered && (this.reduced || this.hasBeenHalfVisible)) {
 			this.hasEntered = true;
 			this.state = reduce(this.state, { type: 'enter' }, now, this.context());
 		}
