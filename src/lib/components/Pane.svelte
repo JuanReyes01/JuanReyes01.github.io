@@ -28,12 +28,12 @@
 	const titleId = $derived(`${id}-title`);
 </script>
 
-<section class="pane raw-glyphs" class:nested data-section={section} aria-labelledby={titleId}>
-	<svelte:element this={'h' + headingLevel} class="pane-title" id={titleId}>
+<section class="pane" class:nested data-section={section} aria-labelledby={titleId}>
+	<svelte:element this={'h' + headingLevel} class="pane-title raw-glyphs" id={titleId}>
 		{#if index !== undefined}<span class="k" aria-hidden="true">[{index}]</span>{/if}
 		<span class="ttl">{title}</span>
 	</svelte:element>
-	{#if meta}<span class="pane-meta" aria-hidden="true">{meta}</span>{/if}
+	{#if meta}<span class="pane-meta raw-glyphs" aria-hidden="true">{meta}</span>{/if}
 	{#if head}<div class="pane-head">{@render head()}</div>{/if}
 	{@render children()}
 </section>
