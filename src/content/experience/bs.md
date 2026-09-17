@@ -1,0 +1,18 @@
+---
+id: bs
+title: 'B.S. Electronics + B.S. Systems Eng.'
+org: 'Universidad de los Andes'
+summary: 'Two degrees at once, graduated with a 4.16/5.0 GPA.'
+start: '2019-08'
+end: '2025-10'
+lane:
+  label: 'B.S. Electronics + B.S. Systems Eng.'
+  short: 'b.s. ×2 · uniandes'
+  color: green
+events:
+  - at: '2025-10'
+    text: 'Graduated with two B.S. degrees, GPA 4.16/5.0'
+---
+
+Two degrees at once: modeling and optimization, communication and technology
+infrastructure, offensive cybersecurity.
