@@ -45,6 +45,21 @@ describe('experienceFrontmatterSchema', () => {
 	it('rejects an events array with zero entries', () => {
 		expect(experienceFrontmatterSchema.safeParse({ ...valid, events: [] }).success).toBe(false);
 	});
+
+	it('rejects an unknown top-level key (a typo should fail the build, not be silently dropped)', () => {
+		expect(
+			experienceFrontmatterSchema.safeParse({ ...valid, sumary: 'typo for summary' }).success
+		).toBe(false);
+	});
+
+	it('rejects an unknown key inside `lane`', () => {
+		expect(
+			experienceFrontmatterSchema.safeParse({
+				...valid,
+				lane: { ...valid.lane, colour: 'pink' }
+			}).success
+		).toBe(false);
+	});
 });
 
 describe('workFrontmatterSchema', () => {
@@ -78,6 +93,41 @@ describe('workFrontmatterSchema', () => {
 	it('rejects an empty stack array', () => {
 		expect(workFrontmatterSchema.safeParse({ ...valid, stack: [] }).success).toBe(false);
 	});
+
+	it('rejects an unknown top-level key', () => {
+		expect(workFrontmatterSchema.safeParse({ ...valid, buidl: 2 }).success).toBe(false);
+	});
+
+	it('rejects an unknown key inside `metric`', () => {
+		expect(
+			workFrontmatterSchema.safeParse({
+				...valid,
+				metric: { ...valid.metric, unit: 'calls' }
+			}).success
+		).toBe(false);
+	});
+
+	it('accepts a diagram with an optional `name` prefix (legacy figcaption parity)', () => {
+		const withName = {
+			...valid,
+			diagram: {
+				caption: 'pipeline',
+				label: 'a pipeline diagram',
+				art: 'A -> B',
+				name: 'feeder-rfid'
+			}
+		};
+		expect(workFrontmatterSchema.safeParse(withName).success).toBe(true);
+	});
+
+	it('rejects an unknown key inside `diagram`', () => {
+		expect(
+			workFrontmatterSchema.safeParse({
+				...valid,
+				diagram: { caption: 'pipeline', label: 'a pipeline diagram', art: 'A -> B', title: 'x' }
+			}).success
+		).toBe(false);
+	});
 });
 
 describe('postFrontmatterSchema', () => {
@@ -100,6 +150,17 @@ describe('postFrontmatterSchema', () => {
 			}).success
 		).toBe(false);
 	});
+
+	it('rejects an unknown top-level key', () => {
+		expect(
+			postFrontmatterSchema.safeParse({
+				title: 'x',
+				date: '2026-09-01',
+				summary: 'x',
+				slug: 'x'
+			}).success
+		).toBe(false);
+	});
 });
 
 describe('homeFrontmatterSchema', () => {
@@ -116,6 +177,21 @@ describe('homeFrontmatterSchema', () => {
 	it('rejects an empty highlights array', () => {
 		expect(homeFrontmatterSchema.safeParse({ ...valid, highlights: [] }).success).toBe(false);
 	});
+
+	it('rejects an unknown top-level key', () => {
+		expect(homeFrontmatterSchema.safeParse({ ...valid, hilights: ['creditbay'] }).success).toBe(
+			false
+		);
+	});
+
+	it('rejects an unknown key inside a `now`/`how` item', () => {
+		expect(
+			homeFrontmatterSchema.safeParse({
+				...valid,
+				now: [{ title: 't', desc: 'd', tags: [], icon: 'x' }]
+			}).success
+		).toBe(false);
+	});
 });
 
 describe('fieldFrontmatterSchema', () => {
@@ -131,5 +207,22 @@ describe('fieldFrontmatterSchema', () => {
 	it('rejects a station with no kind', () => {
 		const bad = { ...valid, stations: [{ title: 'x', desc: 'y' }] };
 		expect(fieldFrontmatterSchema.safeParse(bad).success).toBe(false);
+	});
+
+	it('rejects an unknown top-level key', () => {
+		expect(fieldFrontmatterSchema.safeParse({ ...valid, extra: true }).success).toBe(false);
+	});
+
+	it('rejects an unknown key inside a station', () => {
+		const bad = {
+			...valid,
+			stations: [{ title: 'x', desc: 'y', kind: 'proposal', status: 'done' }]
+		};
+		expect(fieldFrontmatterSchema.safeParse(bad).success).toBe(false);
+	});
+
+	it("accepts the diagram's optional `name` prefix (legacy figcaption parity: <b>name</b> — caption)", () => {
+		const withName = { ...valid, diagram: { ...valid.diagram, name: 'feeder-rfid' } };
+		expect(fieldFrontmatterSchema.safeParse(withName).success).toBe(true);
 	});
 });
