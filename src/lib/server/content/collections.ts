@@ -185,6 +185,20 @@ export function homePage(): ContentEntry<HomeFrontmatter> {
 	return loadHomePageFiles(files, workSlugs);
 }
 
+/** Display order for the work index — build number ascending (legacy row order). */
+export function sortWorkForDisplay(
+	entries: ContentEntry<WorkFrontmatter>[]
+): ContentEntry<WorkFrontmatter>[] {
+	return [...entries].sort((a, b) => a.data.build - b.data.build);
+}
+
+/** Display order for the experience role list — most recent role first (legacy row order). */
+export function sortExperienceForDisplay(
+	entries: ContentEntry<ExperienceFrontmatter>[]
+): ContentEntry<ExperienceFrontmatter>[] {
+	return [...entries].sort((a, b) => b.data.start.localeCompare(a.data.start));
+}
+
 export function fieldPage(): ContentEntry<FieldFrontmatter> {
 	const files = import.meta.glob('/src/content/pages/field.md', {
 		query: '?raw',
