@@ -1,4 +1,6 @@
-// The whole site is a prerendered, static build (adapter-static). Full shell
-// logic (theme, TabBar, skip link, data-section) lands in the design-system
-// PR; this minimal flag is what makes the toolchain scaffold buildable.
+// The whole site is a prerendered, static build (adapter-static, design
+// "Technical Approach"). `trailingSlash: 'always'` matches every route path
+// used across the design (`/experience/`, `/work/`, ...); feeds and the 404
+// page override it to `'never'` where noted in the design.
 export const prerender = true;
+export const trailingSlash = 'always';
