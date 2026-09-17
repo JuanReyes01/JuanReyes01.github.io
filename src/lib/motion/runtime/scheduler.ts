@@ -5,8 +5,10 @@
  * least one registered engine is both visible and not yet settled. A
  * settled engine "leaves the loop" — it stops being drawn and the loop
  * itself stops requesting frames once every engine has settled — until
- * something calls {@link Scheduler.wake}. The clock is injected so this
- * class needs no real timers, DOM, or `requestAnimationFrame` to test.
+ * something calls {@link Scheduler.wake}, or {@link Scheduler.invalidate}
+ * to force exactly one more draw even if the engine already reports itself
+ * settled. The clock is injected so this class needs no real timers, DOM,
+ * or `requestAnimationFrame` to test.
  */
 export interface SchedulableEngine {
 	visible: boolean;
@@ -35,6 +37,15 @@ export const FRAME_MS = 40;
 
 export class Scheduler {
 	private readonly engines = new Set<SchedulableEngine>();
+	/**
+	 * Engines forced to draw at least once regardless of `isSettled()` (R2:
+	 * without this, an external change — reduced-motion toggle, theme
+	 * change, resize, scrub, key input — that flips an engine straight to
+	 * "settled" without going through a draw first would make `wake()` a
+	 * no-op forever, since `hasActiveEngine()` only looks for *unsettled*
+	 * engines). Cleared once that forced draw actually happens.
+	 */
+	private readonly dirty = new Set<SchedulableEngine>();
 	private frameId: number | null = null;
 	private lastDrawTime: number;
 
@@ -51,6 +62,7 @@ export class Scheduler {
 		this.kick();
 		return () => {
 			this.engines.delete(engine);
+			this.dirty.delete(engine);
 		};
 	}
 
@@ -59,9 +71,20 @@ export class Scheduler {
 		this.kick();
 	}
 
+	/**
+	 * Forces exactly one more draw of `engine` on the next tick, even if it
+	 * currently reports itself settled. Use this (instead of `wake()`) for
+	 * any external change whose visual effect the engine's `isSettled()`
+	 * doesn't already reflect yet — see the class doc above.
+	 */
+	invalidate(engine: SchedulableEngine): void {
+		this.dirty.add(engine);
+		this.kick();
+	}
+
 	private hasActiveEngine(): boolean {
 		for (const engine of this.engines) {
-			if (engine.visible && !engine.isSettled()) return true;
+			if (engine.visible && (!engine.isSettled() || this.dirty.has(engine))) return true;
 		}
 		return false;
 	}
@@ -77,7 +100,14 @@ export class Scheduler {
 		if (!this.clock.isHidden() && now - this.lastDrawTime >= this.frameMs) {
 			this.lastDrawTime = now;
 			for (const engine of this.engines) {
-				if (engine.visible) engine.draw(now);
+				if (!engine.visible) continue;
+				const forced = this.dirty.has(engine);
+				// R3: a settled, non-dirty engine already looks the same as
+				// last frame — skip the wasted redraw instead of drawing it
+				// unconditionally just because some other engine is active.
+				if (engine.isSettled() && !forced) continue;
+				engine.draw(now);
+				this.dirty.delete(engine);
 			}
 		}
 		this.kick();

@@ -74,7 +74,7 @@ describe('Scheduler', () => {
 		expect(engine.draws).toEqual([40, 80]);
 	});
 
-	it('stops scheduling once every engine has settled', () => {
+	it('stops scheduling once every engine has settled, and skips the redraw once it already reports settled (R3)', () => {
 		const clock = fakeClock();
 		const scheduler = new Scheduler(clock);
 		let settled = false;
@@ -84,8 +84,36 @@ describe('Scheduler', () => {
 
 		settled = true;
 		clock.tick(40);
-		expect(engine.draw).toHaveBeenCalledTimes(1); // last tick before settling still draws once
+		// `isSettled()` already reports true by the time this tick runs (no
+		// intervening draw caught the true→settled transition), so R3 skips
+		// the now-redundant redraw instead of drawing it unconditionally.
+		expect(engine.draw).not.toHaveBeenCalled();
 		expect(clock.frameCount).toBe(1); // no further frame requested — engine left the loop
+	});
+
+	it('invalidate() forces one draw even though the engine reports settled, then stops (R2 — settled/wake deadlock)', () => {
+		const clock = fakeClock();
+		const scheduler = new Scheduler(clock);
+		const engine = fakeEngine({ settled: true });
+		scheduler.add(engine);
+		expect(clock.frameCount).toBe(0); // settled, not dirty: no loop (plain wake() would also no-op here)
+
+		scheduler.invalidate(engine);
+		expect(clock.frameCount).toBe(1);
+		clock.tick(40);
+		expect(engine.draws).toEqual([40]); // forced despite isSettled() === true
+		expect(clock.frameCount).toBe(1); // dirty cleared after the draw — no further frame requested
+	});
+
+	it('invalidate() on an invisible engine does not schedule a frame', () => {
+		const clock = fakeClock();
+		const scheduler = new Scheduler(clock);
+		const engine = fakeEngine({ visible: false, settled: true });
+		scheduler.add(engine);
+
+		scheduler.invalidate(engine);
+		expect(clock.frameCount).toBe(0);
+		expect(engine.draws).toEqual([]);
 	});
 
 	it('resumes the loop when wake() is called after settling', () => {
