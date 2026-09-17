@@ -3,6 +3,7 @@
 	import Pane from '$lib/components/Pane.svelte';
 	import Row from '$lib/components/Row.svelte';
 	import Figlet from '$lib/components/Figlet.svelte';
+	import Strip from '$lib/components/Strip.svelte';
 	import SeoHead from '$lib/components/SeoHead.svelte';
 	import { timeline as timelineAction } from '$lib/motion/actions/timeline';
 	import type { TimelineActionHandle } from '$lib/motion/actions/timeline';
@@ -50,11 +51,13 @@
 		return `${startLabel} — ${endLabel}`;
 	}
 
-	const FIG = `_____ ___ __  __ _____ _     ___ _   _ _____
-|_   _|_ _|  \\/  | ____| |   |_ _| \\ | | ____|
-  | |  | || |\\/| |  _| | |    | ||  \\| |  _|
-  | |  | || |  | | |___| |___ | || |\\  | |___
-  |_| |___|_|  |_|_____|_____|___|_| \\_|_____|`;
+	// pyfiglet, font "standard" (apply-fix batch, owner request R2: header
+	// text must match the tab name — "EXPERIENCE", not the old "TIMELINE").
+	const FIG = `_______  ______  _____ ____  ___ _____ _   _  ____ _____
+| ____\\ \\/ /  _ \\| ____|  _ \\|_ _| ____| \\ | |/ ___| ____|
+|  _|  \\  /| |_) |  _| | |_) || ||  _| |  \\| | |   |  _|
+| |___ /  \\|  __/| |___|  _ < | || |___| |\\  | |___| |___
+|_____/_/\\_\\_|   |_____|_| \\_\\___|_____|_| \\_|\\____|_____|`;
 </script>
 
 <SeoHead
@@ -73,6 +76,7 @@
 >
 	{#snippet head()}
 		<Figlet art={FIG} />
+		<Strip />
 	{/snippet}
 
 	<div class="tl">

@@ -4,6 +4,8 @@
 	import Tag from '$lib/components/Tag.svelte';
 	import Metric from '$lib/components/Metric.svelte';
 	import SeoHead from '$lib/components/SeoHead.svelte';
+	import Figlet from '$lib/components/Figlet.svelte';
+	import Strip from '$lib/components/Strip.svelte';
 	import { sky } from '$lib/motion/actions/sky';
 	import { buildLegacyRedirectScript } from '$lib/domain/redirects';
 	import type { PageData } from './$types';
@@ -20,6 +22,14 @@
 	const scriptOpen = '<scr' + 'ipt>';
 	const scriptClose = '<' + '/scr' + 'ipt>';
 	const redirectHeadScript = scriptOpen + buildLegacyRedirectScript() + scriptClose;
+
+	// pyfiglet, font "standard" (apply-fix batch, owner request R2: every tab
+	// gets a figlet header matching its name — home had none until now).
+	const FIG = `_   _  ___  __  __ _____
+| | | |/ _ \\|  \\/  | ____|
+| |_| | | | | |\\/| |  _|
+|  _  | |_| | |  | | |___
+|_| |_|\\___/|_|  |_|_____|`;
 </script>
 
 <SeoHead
@@ -33,6 +43,11 @@
 </svelte:head>
 
 <Pane id="about" index={1} title="home" section="about" meta="bogotá · utc−5" headingLevel={1}>
+	{#snippet head()}
+		<Figlet art={FIG} />
+		<Strip />
+	{/snippet}
+
 	<div class="hero" bind:this={heroEl}>
 		<div class="hero-text" bind:this={heroTextEl}>
 			<p class="prompt"><b>juan@laptop</b>:~$ whoami</p>
