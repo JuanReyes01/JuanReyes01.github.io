@@ -11,7 +11,7 @@ lane:
   color: magenta
 events:
   - at: '2024-09'
-    text: 'Research Assistant — Universidad de los Andes'
+    text: 'Research assistant at Uniandes Economics — argument mining'
 ---
 
 - Directed an argumentation-mining subproject: Longformer and Gemma span

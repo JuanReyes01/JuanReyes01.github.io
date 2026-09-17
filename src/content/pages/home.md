@@ -37,3 +37,6 @@ I'm an **electronics and systems engineer** from Bogotá, Colombia. I lead AI
 and engineering at **Creceré**, where we build CreditBay — a debt-recovery
 platform where AI voice agents make the calls. Before that I did ML research
 at Cornell and Universidad de los Andes.
+
+Off the clock it's a 3D printer, a riced Hyprland desktop, and software and
+hardware for biologists who study hummingbirds.
