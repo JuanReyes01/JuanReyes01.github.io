@@ -1,27 +1,38 @@
 import { formatMonth } from './month';
-import type { Month, Timeline } from './types';
+import type { Month, Timeline, TimelineDatedEvent } from './types';
 
 export interface Readout {
 	date: string;
-	laneId: string;
+	laneId: string | null;
 	text: string;
+	chips: string[];
+}
+
+function latestEventAt(events: TimelineDatedEvent[], month: Month): TimelineDatedEvent | null {
+	let latest: TimelineDatedEvent | null = null;
+	for (const event of events) {
+		if (event.m <= month && (!latest || event.m > latest.m)) latest = event;
+	}
+	return latest;
 }
 
 /**
- * The `.tl-readout` line for a given scrub position: the active lane at
- * `month` and the text of its most recent event at or before that month.
+ * The `.tl-readout` line for a given scrub position, matching the legacy
+ * `Timeline.prototype.updateReadout`: the LATEST event at or before `month`
+ * (across every lane, not just the lane whose range contains `month`)
+ * drives both the displayed text and the date's lane color, while `chips`
+ * lists every lane active that month independent of which event is latest.
  */
-export function readoutAt(t: Timeline, month: Month): Readout | null {
-	const lane = t.lanes.find((l) => month >= l.m0 && month <= l.m1);
-	if (!lane) return null;
-
-	const laneEvents = t.events
-		.filter((e) => e.lane === lane.id && e.m <= month)
-		.sort((a, b) => b.m - a.m);
+export function readoutAt(t: Timeline, month: Month): Readout {
+	const latest = latestEventAt(t.events, month);
+	const chips = t.lanes
+		.filter((lane) => lane.m0 <= month && month <= lane.m1)
+		.map((lane) => lane.id);
 
 	return {
 		date: formatMonth(month),
-		laneId: lane.id,
-		text: laneEvents[0]?.text ?? lane.label
+		laneId: latest?.lane ?? null,
+		text: latest?.text ?? '',
+		chips
 	};
 }
