@@ -1,11 +1,12 @@
 /**
- * The experience timeline canvas engine (design D4/D14/D15, motion table
- * "Timeline"). Consumes the pure domain grid/playback/readout modules from
- * Phase 3a and the cell-visual rules from `timeline-visuals.ts`; owns only
- * the canvas 2D drawing and the `Engine` lifecycle. Interaction (pointer,
- * touch, keyboard) is wired by `motion/actions/timeline.ts`, which calls
- * this engine's `scrub`/`key`/`release`/`setFocusLane` methods — a11y
- * attributes (`role="slider"`, `aria-valuenow`, ...) land in Phase 5.
+ * The career timeline canvas engine on `/work/` (design D4/D14/D15, motion
+ * table "Timeline"; v2 direction slice S1 killed the automatic epoch sweep —
+ * the graph renders complete and at rest at HEAD from the first frame).
+ * Consumes the pure domain grid/playback/readout modules and the cell-visual
+ * rules from `timeline-visuals.ts`; owns only the canvas 2D drawing and the
+ * `Engine` lifecycle. Interaction (pointer, touch, keyboard) is wired by
+ * `motion/actions/timeline.ts`, which calls this engine's
+ * `scrub`/`key`/`release`/`setFocusLane` methods.
  */
 import { buildGrid } from '../../domain/git-graph';
 import { layoutFor } from '../../domain/layout';
@@ -53,11 +54,6 @@ export class TimelineEngine implements Engine {
 
 	private state: Playback;
 	private settled = true;
-	private hasEntered = false;
-	/** Set once the IntersectionObserver ratio reaches >= 0.5 for the first
-	 * time (E2/design D15: "the first time ≥50% is visible"). Reduced motion
-	 * bypasses this — it parks at HEAD immediately regardless of visibility. */
-	private hasBeenHalfVisible = false;
 	private lastMonth = -1;
 
 	constructor(opts: TimelineEngineOptions) {
@@ -72,24 +68,18 @@ export class TimelineEngine implements Engine {
 
 		this.layout = layoutFor(0, this.timeline);
 		this.grid = buildGrid(this.timeline, this.layout);
-		// `P` starts at `epoch`, never literal `0` — `Month` is absolute
-		// (design D1), so `0` would mean "year 0" instead of "the timeline's
-		// start" (see the doc comment on `PlaybackContext.epoch`).
-		this.state = {
-			mode: 'idle',
-			P: opts.timeline.epoch,
-			startedAt: 0,
-			releasedAt: 0,
-			focusLane: null
-		};
+		// The graph renders complete and at rest at HEAD from the very first
+		// frame (owner decision, v2 direction slice S1: "kill the timeline's
+		// automatic epoch sweep" — no intro plays, nothing dims or animates
+		// without user input).
+		this.state = { mode: 'rest', P: opts.timeline.last, releasedAt: 0, focusLane: null };
 	}
 
 	private context() {
 		return {
 			last: this.timeline.last,
 			epoch: this.timeline.epoch,
-			step: this.layout.step,
-			reduced: this.reduced
+			step: this.layout.step
 		};
 	}
 
@@ -143,13 +133,12 @@ export class TimelineEngine implements Engine {
 		}
 	}
 
-	/** IntersectionObserver report (E2): gates when the intro is allowed to
-	 * start. `visible` itself isn't needed here — the shared scheduler's
-	 * boolean visibility already stops `draw()` from being called at all
-	 * while off-screen; only the finer 0.5 ratio matters to this engine. */
-	setVisibility(_visible: boolean, ratio: number): void {
-		if (ratio >= 0.5) this.hasBeenHalfVisible = true;
-	}
+	/** Unused: the shared scheduler's boolean visibility already gates whether
+	 * `draw()` runs at all (R1). The timeline has no automatic intro left to
+	 * gate on a finer visibility ratio (owner decision, v2 direction slice
+	 * S1: "kill the timeline's automatic epoch sweep") — same no-op as the
+	 * sky and band engines. */
+	setVisibility(): void {}
 
 	isSettled(): boolean {
 		return this.settled;
@@ -197,18 +186,7 @@ export class TimelineEngine implements Engine {
 	}
 
 	draw(now: number): void {
-		// E2: the intro only starts once the timeline has been at least 50%
-		// visible; if it never becomes visible, it never plays. Reduced
-		// motion is exempt — it parks at HEAD immediately either way.
-		if (!this.hasEntered && (this.reduced || this.hasBeenHalfVisible)) {
-			this.hasEntered = true;
-			this.state = reduce(this.state, { type: 'enter' }, now, this.context());
-		}
-
-		const { P, settled } = positionAt(this.state, now, {
-			last: this.timeline.last,
-			epoch: this.timeline.epoch
-		});
+		const { P, settled } = positionAt(this.state, now, { last: this.timeline.last });
 		this.settled = settled;
 		this.state = { ...this.state, P };
 

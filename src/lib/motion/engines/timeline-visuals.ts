@@ -1,6 +1,6 @@
 /**
- * Cell-level rendering rules for the experience timeline canvas (motion
- * table "Timeline", spec "Timeline plays once, then rests at HEAD"). Ported
+ * Cell-level rendering rules for the career timeline canvas on `/work/`
+ * (motion table "Timeline"). Ported
  * from the legacy `Timeline.prototype.draw` loop, minus the two effects the
  * spec removes outright: the per-lane comet overlay and the HEAD pulse
  * (owner rule: "NO comets, NO HEAD pulse"). What stays: past-lit /
