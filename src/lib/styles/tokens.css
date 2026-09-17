@@ -1,0 +1,126 @@
+/*
+ * Design tokens (design D11): dark-first. Bare :root is the default (dark)
+ * theme. The light palette swaps in under `prefers-color-scheme: light`,
+ * guarded so an explicit `data-theme="dark"` always wins. `data-theme="light"`
+ * forces light regardless of system preference. There is no theme-toggle UI
+ * yet — the `data-theme` attribute is a hook for a future control.
+ */
+:root {
+	--bg: #0e1424;
+	--banner: #0a0f1c;
+	--surface: #151c30;
+	--sel: #1f2945;
+	--line: #2a3655;
+	--fg: #e8e6f0;
+	--fg-2: #c8cbe0;
+	--muted: #8a95b8;
+	--on-accent: #0e1424;
+	--kbd-bg: #1a2138;
+	--status-bg: #0a0f1c;
+	--veil: rgba(10, 15, 28, 0.9);
+
+	--cyan: #2fe0c6;
+	--magenta: #b07af5;
+	--yellow: #f2c97e;
+	--green: #7ee08c;
+	--blue: #5aa7f5;
+	--pink: #f25477;
+
+	--font-mono:
+		'JetBrains Mono', 'JetBrainsMono Nerd Font', ui-monospace, 'SFMono-Regular', Menlo, Consolas,
+		monospace;
+	--font-sans: 'IBM Plex Sans', 'Helvetica Neue', 'Segoe UI', system-ui, sans-serif;
+	--status-h: 30px;
+
+	color-scheme: dark light;
+}
+
+@media (prefers-color-scheme: light) {
+	:root:not([data-theme='dark']) {
+		--bg: #eef1f7;
+		--banner: #e3e8f2;
+		--surface: #ffffff;
+		--sel: #dde5f3;
+		--line: #c9d1e2;
+		--fg: #121829;
+		--fg-2: #343d5c;
+		--muted: #56608a;
+		--on-accent: #ffffff;
+		--kbd-bg: #e3e8f2;
+		--status-bg: #e3e8f2;
+		--veil: rgba(227, 232, 242, 0.93);
+
+		--cyan: #08796a;
+		--magenta: #7040c4;
+		--yellow: #8a5d0c;
+		--green: #2a7a38;
+		--blue: #2863b0;
+		--pink: #c42d55;
+
+		color-scheme: light;
+	}
+}
+
+:root[data-theme='light'] {
+	--bg: #eef1f7;
+	--banner: #e3e8f2;
+	--surface: #ffffff;
+	--sel: #dde5f3;
+	--line: #c9d1e2;
+	--fg: #121829;
+	--fg-2: #343d5c;
+	--muted: #56608a;
+	--on-accent: #ffffff;
+	--kbd-bg: #e3e8f2;
+	--status-bg: #e3e8f2;
+	--veil: rgba(227, 232, 242, 0.93);
+
+	--cyan: #08796a;
+	--magenta: #7040c4;
+	--yellow: #8a5d0c;
+	--green: #2a7a38;
+	--blue: #2863b0;
+	--pink: #c42d55;
+
+	color-scheme: light;
+}
+
+/*
+ * Type scale (design D12). Section accents style chrome only — see
+ * `[data-section]` below — never body copy, per the design-system spec's
+ * "section-color scoping" requirement.
+ */
+:root {
+	--fs-xs: 0.72rem;
+	--fs-sm: 0.8rem;
+	--fs-md: 0.92rem;
+	--fs-base: 1rem;
+	--fs-lg: 1.1rem;
+	--fs-xl: clamp(1.7rem, 1.1rem + 2.2vw, 2.35rem);
+}
+
+/*
+ * Section-color scoping (design D11). Applied on a `data-section` attribute
+ * so any component (Pane, TabBar, Row) can read `--pc`/`--pc2` for its
+ * accent without hardcoding a palette per component.
+ */
+[data-section='about'] {
+	--pc: var(--cyan);
+	--pc2: var(--blue);
+}
+[data-section='experience'] {
+	--pc: var(--magenta);
+	--pc2: var(--pink);
+}
+[data-section='work'] {
+	--pc: var(--yellow);
+	--pc2: var(--pink);
+}
+[data-section='field'] {
+	--pc: var(--green);
+	--pc2: var(--cyan);
+}
+[data-section='writing'] {
+	--pc: var(--blue);
+	--pc2: var(--magenta);
+}

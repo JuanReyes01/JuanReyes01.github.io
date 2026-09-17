@@ -1,0 +1,130 @@
+*,
+*::before,
+*::after {
+	box-sizing: border-box;
+}
+
+html {
+	scroll-behavior: smooth;
+}
+
+body {
+	margin: 0;
+	background: var(--bg);
+	color: var(--fg);
+	font-family: var(--font-sans);
+	font-size: var(--fs-base);
+	line-height: 1.6;
+	-webkit-font-smoothing: antialiased;
+}
+
+a {
+	color: var(--pc, var(--cyan));
+	text-underline-offset: 3px;
+	text-decoration-thickness: 1px;
+}
+a:hover {
+	color: var(--pc2, var(--blue));
+}
+
+:focus-visible {
+	outline: 1px dashed var(--pc, var(--cyan));
+	outline-offset: 2px;
+}
+
+/*
+ * JetBrains Mono ligatures merge sequences like `_/` and `|_|` into single
+ * glyphs — ASCII art and monospace UI chrome need the raw, unmerged glyphs
+ * (design D12).
+ */
+.raw-glyphs {
+	font-variant-ligatures: none;
+	font-feature-settings:
+		'liga' 0,
+		'calt' 0;
+}
+
+.sr-only {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	padding: 0;
+	margin: -1px;
+	overflow: hidden;
+	clip: rect(0, 0, 0, 0);
+	white-space: nowrap;
+	border: 0;
+}
+
+.skip-link {
+	position: absolute;
+	top: -100%;
+	left: 8px;
+	z-index: 100;
+	padding: 8px 14px;
+	background: var(--surface);
+	color: var(--fg);
+	border: 1px solid var(--pc, var(--cyan));
+	border-radius: 3px;
+	font-family: var(--font-mono);
+	font-size: var(--fs-sm);
+	text-decoration: none;
+	transition: top 0.15s;
+}
+.skip-link:focus {
+	top: 8px;
+}
+
+/*
+ * Cross-document view transitions (design D5). The site uses full-document
+ * (MPA) navigation; browsers without support for the `@view-transition`
+ * at-rule simply navigate normally (progressive enhancement).
+ */
+@view-transition {
+	navigation: auto;
+}
+
+.tabbar {
+	view-transition-name: tabbar;
+}
+
+main {
+	view-transition-name: main;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+	::view-transition-old(main),
+	::view-transition-new(main) {
+		animation-duration: 180ms;
+		animation-timing-function: ease-out;
+	}
+	::view-transition-old(main) {
+		animation-name: pane-out;
+	}
+	::view-transition-new(main) {
+		animation-name: pane-in;
+	}
+	@keyframes pane-out {
+		to {
+			opacity: 0;
+			transform: translateY(-8px);
+		}
+	}
+	@keyframes pane-in {
+		from {
+			opacity: 0;
+			transform: translateY(8px);
+		}
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	html {
+		scroll-behavior: auto;
+	}
+	::view-transition-group(*),
+	::view-transition-old(*),
+	::view-transition-new(*) {
+		animation: none !important;
+	}
+}
