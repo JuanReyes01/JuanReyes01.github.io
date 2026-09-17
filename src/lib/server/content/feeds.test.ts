@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildRss, buildSitemap, postsToFeedItems } from './feeds';
+import { buildRss, buildSitemap, postsToFeedItems, sitemapRoutes } from './feeds';
 import type { ContentEntry } from './collections';
 import type { PostFrontmatter } from './schemas';
 
@@ -52,6 +52,37 @@ describe('buildRss', () => {
 			{ title: 'Two', link: 'l2', description: 'd', pubDate: 'now' }
 		]);
 		expect(xml.match(/<item>/g)).toHaveLength(2);
+	});
+});
+
+describe('sitemapRoutes', () => {
+	it('covers every fixed static page plus one route per work slug', () => {
+		const routes = sitemapRoutes(['creditbay', 'amd'], []);
+		expect(routes).toEqual(
+			expect.arrayContaining([
+				'/',
+				'/experience/',
+				'/work/',
+				'/field/',
+				'/work/creditbay/',
+				'/work/amd/'
+			])
+		);
+	});
+
+	it('includes only published posts, excluding drafts, and excludes /writing/ itself', () => {
+		const routes = sitemapRoutes(
+			[],
+			[post({ title: 'Published' }, 'a'), post({ title: 'Draft', draft: true }, 'b')]
+		);
+		expect(routes).toContain('/writing/a/');
+		expect(routes).not.toContain('/writing/b/');
+		expect(routes).not.toContain('/writing/');
+	});
+
+	it('never includes the 404 page', () => {
+		const routes = sitemapRoutes(['creditbay'], []);
+		expect(routes.some((r) => r.includes('404'))).toBe(false);
 	});
 });
 
