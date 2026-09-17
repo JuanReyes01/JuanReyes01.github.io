@@ -72,11 +72,25 @@ export class TimelineEngine implements Engine {
 
 		this.layout = layoutFor(0, this.timeline);
 		this.grid = buildGrid(this.timeline, this.layout);
-		this.state = { mode: 'idle', P: 0, startedAt: 0, releasedAt: 0, focusLane: null };
+		// `P` starts at `epoch`, never literal `0` — `Month` is absolute
+		// (design D1), so `0` would mean "year 0" instead of "the timeline's
+		// start" (see the doc comment on `PlaybackContext.epoch`).
+		this.state = {
+			mode: 'idle',
+			P: opts.timeline.epoch,
+			startedAt: 0,
+			releasedAt: 0,
+			focusLane: null
+		};
 	}
 
 	private context() {
-		return { last: this.timeline.last, step: this.layout.step, reduced: this.reduced };
+		return {
+			last: this.timeline.last,
+			epoch: this.timeline.epoch,
+			step: this.layout.step,
+			reduced: this.reduced
+		};
 	}
 
 	resize(): void {
@@ -104,6 +118,17 @@ export class TimelineEngine implements Engine {
 		this.canvas.height = Math.round(height * dpr);
 		this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 		this.ctx.font = `${fontSize}px "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace`;
+
+		// Repaint immediately with the current playhead. `canvas.width = ...`
+		// above just wiped the bitmap, and the shared scheduler (design D14)
+		// only redraws a settled engine once something marks it dirty,
+		// throttled to ~one redraw per 40ms. A ResizeObserver that fires more
+		// than once inside that window — common while fonts/layout settle,
+		// worse on narrower viewports with more text reflow (font swap, Row
+		// lines wrapping, the Figlet header wrapping) — used to leave the
+		// canvas wiped-but-unpainted for a real, visible stretch. Painting
+		// here closes that gap instead of waiting on the scheduler's next tick.
+		this.render(this.state.P);
 	}
 
 	setTheme(tokens: Tokens): void {
@@ -140,7 +165,7 @@ export class TimelineEngine implements Engine {
 		const rect = this.canvas.getBoundingClientRect();
 		const col = Math.floor((clientX - rect.left) / this.cw);
 		const month = this.timeline.epoch + (col - this.layout.lab) * this.layout.step;
-		return Math.min(this.timeline.last, Math.max(0, month));
+		return Math.min(this.timeline.last, Math.max(this.timeline.epoch, month));
 	}
 
 	/** Scrubs the playhead to an absolute month (pointer/touch/keyboard input from the action layer). */
@@ -180,7 +205,10 @@ export class TimelineEngine implements Engine {
 			this.state = reduce(this.state, { type: 'enter' }, now, this.context());
 		}
 
-		const { P, settled } = positionAt(this.state, now, { last: this.timeline.last });
+		const { P, settled } = positionAt(this.state, now, {
+			last: this.timeline.last,
+			epoch: this.timeline.epoch
+		});
 		this.settled = settled;
 		this.state = { ...this.state, P };
 

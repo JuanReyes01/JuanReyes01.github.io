@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { TimelineEngine } from './timeline';
+import { parseMonth } from '../../domain/month';
 import type { Timeline } from '../../domain/types';
 import type { Readout } from '../../domain/readout';
 import type { Tokens } from '../runtime/tokens';
@@ -19,15 +20,33 @@ const TOKENS: Tokens = {
 	pink: '#f88'
 };
 
+// `epoch` is a REAL calendar month (like the site's actual content), not a
+// naive 0..10 fixture — an `epoch: 0` fixture would silently pass even if
+// the engine hardcoded "the start" as literal `0` instead of
+// `timeline.epoch`. `Month` is absolute (`year*12+(month-1)`, design D1),
+// so `0` means "January, year 0", not "the start of the timeline" — that
+// exact bug made `readoutAt` format an invalid `"0-01"` date and crash
+// `parseMonth` (which requires a 4-digit year) on every real page load.
+const EPOCH = parseMonth('2019-08');
+const LAST = EPOCH + 10;
 const TIMELINE: Timeline = {
-	epoch: 0,
-	last: 10,
+	epoch: EPOCH,
+	last: LAST,
 	lanes: [
-		{ id: 'a', label: 'Alpha lane', short: 'A', color: 'cyan', m0: 0, m1: 10, row: 4, head: true }
+		{
+			id: 'a',
+			label: 'Alpha lane',
+			short: 'A',
+			color: 'cyan',
+			m0: EPOCH,
+			m1: LAST,
+			row: 4,
+			head: true
+		}
 	],
 	events: [
-		{ m: 0, lane: 'a', text: 'Started' },
-		{ m: 5, lane: 'a', text: 'Milestone' }
+		{ m: EPOCH, lane: 'a', text: 'Started' },
+		{ m: EPOCH + 5, lane: 'a', text: 'Milestone' }
 	]
 };
 
@@ -158,7 +177,7 @@ describe('TimelineEngine', () => {
 		engine.draw(0); // settle at HEAD first
 		wake.mockClear();
 		onReadout.mockClear();
-		engine.scrub(2);
+		engine.scrub(EPOCH + 2);
 		expect(wake).toHaveBeenCalled();
 		engine.draw(1);
 		expect(onReadout).toHaveBeenCalledWith(expect.objectContaining({ text: 'Started' }));
@@ -195,10 +214,36 @@ describe('TimelineEngine', () => {
 		expect(ctx.fillText).toHaveBeenCalled();
 	});
 
-	it('sets ctx.font to JetBrains Mono at the computed cell size during resize, before any fillText (E1)', () => {
+	it('sets ctx.font to JetBrains Mono at the computed cell size before resize() paints anything (E1)', () => {
 		const { ctx } = makeEngine({ reduced: true }); // makeEngine() already calls resize()
 		expect(ctx.font).toMatch(/JetBrains Mono/);
-		expect(ctx.fillText).not.toHaveBeenCalled(); // font is set before the first draw(), not inside it
+		// `fillText` WAS called (by resize()'s own immediate repaint — see the
+		// next test) — the guarantee E1 actually cares about is that the font
+		// is correct BEFORE any of those calls, never the reset browser
+		// default. `mock.calls[0]` is fillText's very first invocation ever.
+		expect(ctx.fillText.mock.calls.length).toBeGreaterThan(0);
+	});
+
+	it('resize() immediately repaints the current frame, so reassigning canvas.width never leaves the canvas blank until the next scheduled tick', () => {
+		// Regression: `canvas.width = ...`/`canvas.height = ...` (inside
+		// resize(), to change the backing-store resolution) clears the whole
+		// bitmap as a side effect. The shared scheduler only redraws settled
+		// engines when something marks them dirty, throttled to one redraw
+		// per ~40ms (design D14) — a ResizeObserver that fires more than once
+		// in that window (common while fonts/layout settle, especially on
+		// narrower viewports with more text reflow) used to leave the canvas
+		// wiped-but-unpainted for a real, human-visible window. resize() must
+		// repaint synchronously so the canvas is NEVER left blank.
+		const { engine, ctx } = makeEngine({ reduced: true });
+		expect(ctx.fillText.mock.calls.length).toBeGreaterThan(0); // the initial resize() already repainted
+
+		// A second resize (e.g. a redundant ResizeObserver tick, same width)
+		// wipes the bitmap again and must ALSO repaint immediately.
+		ctx.fillText.mockClear();
+		ctx.clearRect.mockClear();
+		engine.resize();
+		expect(ctx.clearRect).toHaveBeenCalled();
+		expect(ctx.fillText).toHaveBeenCalled();
 	});
 
 	it('setReduced(true) mid-flight parks the timeline at HEAD', () => {
@@ -213,8 +258,17 @@ describe('TimelineEngine', () => {
 
 	it('monthAtClientX converts a pointer position to a clamped month', () => {
 		const { engine } = makeEngine({ reduced: true });
-		expect(engine.monthAtClientX(130)).toBe(0); // near the left edge of the grid body
-		expect(engine.monthAtClientX(-9999)).toBe(0); // clamps below the start
-		expect(engine.monthAtClientX(9999)).toBe(10); // clamps past HEAD
+		expect(engine.monthAtClientX(130)).toBe(EPOCH); // near the left edge of the grid body (epoch, not 0)
+		expect(engine.monthAtClientX(-9999)).toBe(EPOCH); // clamps below the start, to epoch — never to 0
+		expect(engine.monthAtClientX(9999)).toBe(LAST); // clamps past HEAD
+	});
+
+	it('the very first frame (idle, before the intro starts) reports a valid readout at `epoch`, never an invalid month like "0-01" (regression: absolute Month domain, not legacy relative offsets)', () => {
+		const { engine, onReadout } = makeEngine({ reduced: false });
+		engine.draw(0); // never became visible yet — still idle, has not entered
+		expect(onReadout).toHaveBeenCalled();
+		const date = onReadout.mock.calls[0][0].date;
+		expect(() => parseMonth(date)).not.toThrow();
+		expect(date).toBe('2019-08');
 	});
 });
