@@ -5,16 +5,33 @@
  * fetch the subset a page actually renders — Spanish diacritics (e.g.
  * "Bogotá") are covered by latin-ext without a separate import.
  *
- * The box-drawing / geometric-shapes glyphs used by AsciiDiagram art
- * (U+2500-25FF) fall outside every subset Google ships for this typeface,
- * including through @fontsource. Producing a real subset requires
- * `pyftsubset` (fonttools) against the upstream OFL master, which isn't
- * available in this toolchain (bun/Node only, per D17). Deferred — see the
- * apply-progress deviations for this batch. Diagram text falls back to the
- * next monospace font in `--font-mono` for those glyphs until then.
+ * The box-drawing, block and arrow glyphs used by ASCII art and the
+ * canvas engines (U+2190-21FF, U+2500-25FF) are not in any subset Google
+ * ships for this typeface. `static/fonts/jbm-symbols-*.woff2` are subsets of
+ * the upstream JetBrains Mono v2.304 release (SIL OFL 1.1, license alongside),
+ * made with `pyftsubset --unicodes='U+2190-21FF,U+2500-25FF'`. They join the
+ * same family through `unicode-range`, so diagrams keep a single glyph width.
  */
 @import '@fontsource/jetbrains-mono/400.css';
 @import '@fontsource/jetbrains-mono/500.css';
 @import '@fontsource/jetbrains-mono/700.css';
 @import '@fontsource/ibm-plex-sans/400.css';
 @import '@fontsource/ibm-plex-sans/500.css';
+
+@font-face {
+	font-family: 'JetBrains Mono';
+	font-style: normal;
+	font-display: swap;
+	font-weight: 400;
+	src: url('/fonts/jbm-symbols-400.woff2') format('woff2');
+	unicode-range: U+2190-21FF, U+2500-25FF;
+}
+
+@font-face {
+	font-family: 'JetBrains Mono';
+	font-style: normal;
+	font-display: swap;
+	font-weight: 700;
+	src: url('/fonts/jbm-symbols-700.woff2') format('woff2');
+	unicode-range: U+2190-21FF, U+2500-25FF;
+}
