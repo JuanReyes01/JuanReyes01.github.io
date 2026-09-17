@@ -142,9 +142,21 @@
 		border: 1px solid var(--line);
 		border-radius: 4px;
 		background: var(--banner);
+		padding: 12px 10px 8px;
 	}
-	canvas {
+	.tl-frame canvas {
 		display: block;
+		width: 100%;
+		height: 220px;
+		touch-action: pan-y;
+		cursor: ew-resize;
+	}
+	.tl-frame canvas:focus {
+		outline: none;
+	}
+	.tl-frame canvas:focus-visible {
+		outline: 1px dashed var(--pc, var(--cyan));
+		outline-offset: 4px;
 	}
 	.tl-readout {
 		display: flex;
