@@ -27,6 +27,13 @@ export function iridescentField(
 	const b = sampleShimmer(x * 1.8 - t * 2, y * 1.8);
 	const raw = clamp01((a * 0.6 + b * 0.4 - 0.34) / 0.34);
 	const value = raw * raw;
+	// Design #4919 D15's motion table, "Band /field" row, is explicit about
+	// all three inks and both thresholds: "`--green` base; `--cyan` where
+	// shimmer >0.52; `--blue` where shimmer >0.70 and value >0.6". The legacy
+	// pane-header `iridescent` strip field this was ported from only had
+	// green+cyan (`out.c = b > 0.52 ? tokRGB.cyan : null`) — `blue` is a
+	// deliberate, design-specified addition for this new, taller band, not
+	// an undocumented extra.
 	const ink: IridescentInk = b > 0.7 && value > 0.6 ? 'blue' : b > 0.52 ? 'cyan' : 'green';
 	return { value, ink };
 }
