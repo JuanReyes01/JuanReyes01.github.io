@@ -1,0 +1,20 @@
+/*
+ * Self-hosted fonts (design D12, design-system spec "self-hosted fonts, no
+ * third-party requests"). Each @fontsource file bundles every script subset
+ * (latin, latin-ext, cyrillic, ...) behind `unicode-range`, so browsers only
+ * fetch the subset a page actually renders — Spanish diacritics (e.g.
+ * "Bogotá") are covered by latin-ext without a separate import.
+ *
+ * The box-drawing / geometric-shapes glyphs used by AsciiDiagram art
+ * (U+2500-25FF) fall outside every subset Google ships for this typeface,
+ * including through @fontsource. Producing a real subset requires
+ * `pyftsubset` (fonttools) against the upstream OFL master, which isn't
+ * available in this toolchain (bun/Node only, per D17). Deferred — see the
+ * apply-progress deviations for this batch. Diagram text falls back to the
+ * next monospace font in `--font-mono` for those glyphs until then.
+ */
+@import '@fontsource/jetbrains-mono/400.css';
+@import '@fontsource/jetbrains-mono/500.css';
+@import '@fontsource/jetbrains-mono/700.css';
+@import '@fontsource/ibm-plex-sans/400.css';
+@import '@fontsource/ibm-plex-sans/500.css';
