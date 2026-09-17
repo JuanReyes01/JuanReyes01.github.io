@@ -147,3 +147,11 @@ export function browserCanvasActionDeps(): CanvasActionDeps {
 		createIntersectionObserver: createVisibilityObserver
 	};
 }
+
+/**
+ * The shared reduced-motion flag for non-canvas UI (e.g. the row text
+ * scramble action) that doesn't need the full canvas action lifecycle.
+ */
+export function isReducedMotion(): boolean {
+	return getReducedMotionWatcher().get();
+}
