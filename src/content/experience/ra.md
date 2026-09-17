@@ -6,8 +6,8 @@ summary: 'Argumentation mining over a 100k+ article opinion corpus.'
 start: '2024-09'
 end: '2025-12'
 lane:
-  label: 'Research Assistant'
-  short: 'research · uniandes'
+  label: 'research · uniandes'
+  short: 'research'
   color: magenta
 events:
   - at: '2024-09'
