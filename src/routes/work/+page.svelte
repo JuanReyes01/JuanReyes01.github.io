@@ -3,16 +3,21 @@
 	import Row from '$lib/components/Row.svelte';
 	import Metric from '$lib/components/Metric.svelte';
 	import Figlet from '$lib/components/Figlet.svelte';
+	import Strip from '$lib/components/Strip.svelte';
 	import SeoHead from '$lib/components/SeoHead.svelte';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
 
-	const FIG = ` ____  _   _ ___ _     ____  ____
-| __ )| | | |_ _| |   |  _ \\/ ___|
-|  _ \\| | | || || |   | | | \\___ \\
-| |_) | |_| || || |___| |_| |___) |
-|____/ \\___/|___|_____|____/|____/`;
+	// pyfiglet, font "standard" (apply-fix batch, owner request R2: header
+	// text must match the tab name — "WORK", not the old "BUILDS"). Strip is
+	// a static SSR-rendered SVG (no canvas, no client JS — this route ships
+	// zero JS, `csr = false` in +page.server.ts).
+	const FIG = `__        _____  ____  _  __
+\\ \\      / / _ \\|  _ \\| |/ /
+ \\ \\ /\\ / / | | | |_) | ' /
+  \\ V  V /| |_| |  _ <| . \\
+   \\_/\\_/  \\___/|_| \\_\\_|\\_\\`;
 </script>
 
 <SeoHead
@@ -24,6 +29,7 @@
 <Pane id="work" index={3} title="work" section="work" meta="judged by one number" headingLevel={1}>
 	{#snippet head()}
 		<Figlet art={FIG} />
+		<Strip />
 	{/snippet}
 
 	<div class="list-meta">

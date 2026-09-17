@@ -17,6 +17,16 @@
 		color: var(--pc, var(--cyan));
 		white-space: pre;
 	}
+	/* Apply-fix batch (owner request R2): longer headers ("EXPERIENCE") ran
+	   the full width of a narrow pane at the fixed 0.6rem size, leaving the
+	   pane-head's `minmax(0, 1fr)` strip column nothing to render into. The
+	   figlet itself must scale down before that happens — the strip must stay
+	   visible next to it, and neither may ever force horizontal page scroll. */
+	@media (max-width: 760px) {
+		.fig {
+			font-size: 0.44rem;
+		}
+	}
 	/* F8 (sveltekit-migration apply-fix batch): legacy `.fig` (index.html)
 	   clips a two-tone section-color gradient to the glyph strokes instead of
 	   a flat single hue — at this banner's small size/thin strokes, the flat
