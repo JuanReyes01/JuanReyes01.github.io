@@ -6,8 +6,8 @@ summary: 'Two degrees at once, graduated with a 4.16/5.0 GPA.'
 start: '2019-08'
 end: '2025-10'
 lane:
-  label: 'B.S. Electronics + B.S. Systems Eng.'
-  short: 'b.s. ×2 · uniandes'
+  label: 'b.s. ×2 · uniandes'
+  short: 'b.s. ×2'
   color: green
 events:
   - at: '2019-08'

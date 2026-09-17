@@ -6,8 +6,8 @@ summary: 'Voice agents and transcript analytics for CreditBay.'
 start: '2025-05'
 end: '2026-02'
 lane:
-  label: 'Machine Learning Engineer'
-  short: 'ml eng · creceré'
+  label: 'ml eng · creceré'
+  short: 'ml eng'
   color: yellow
 events:
   - at: '2025-05'
