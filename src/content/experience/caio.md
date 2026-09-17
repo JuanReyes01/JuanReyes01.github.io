@@ -2,6 +2,7 @@
 id: caio
 title: 'Chief AI Officer'
 org: 'Creceré'
+sub: 'creceré · ai debt-recovery startup · 20 → 600 calls/min'
 summary: 'Leads AI strategy and engineering for the debt-recovery platform CreditBay.'
 start: '2026-02'
 end: present

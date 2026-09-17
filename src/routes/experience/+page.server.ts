@@ -22,6 +22,11 @@ export const load: PageServerLoad = () => {
 		id: entry.data.id,
 		title: entry.data.title,
 		org: entry.data.org,
+		// F5 (sveltekit-migration apply-fix batch): prefer the content's own
+		// `sub` line (legacy row sub-line, e.g. "creceré · ai debt-recovery
+		// startup · 20 → 600 calls/min") — falls back to the org name for
+		// any entry that hasn't set one.
+		sub: entry.data.sub ?? entry.data.org.toLowerCase(),
 		summary: entry.data.summary,
 		start: entry.data.start,
 		end: entry.data.end,

@@ -45,6 +45,7 @@ const DATA = {
 			id: 'caio',
 			title: 'Chief AI Officer',
 			org: 'Creceré',
+			sub: 'creceré · ai debt-recovery startup · 20 → 600 calls/min',
 			summary: 'Leads AI strategy and engineering for CreditBay.',
 			start: '2026-02',
 			end: 'present',
@@ -54,6 +55,7 @@ const DATA = {
 			id: 'bs',
 			title: 'B.S. Electronics + B.S. Systems Eng.',
 			org: 'Universidad de los Andes',
+			sub: 'universidad de los andes · graduated oct 2025 · gpa 4.16 / 5.0',
 			summary: 'Two degrees at once.',
 			start: '2019-08',
 			end: '2025-10',
@@ -91,5 +93,10 @@ describe('experience page (/experience/)', () => {
 	it('has a single h1 for the page (the pane title)', () => {
 		const { body } = render(Page, { props: { data: DATA } });
 		expect(body.match(/<h1[ >]/g)).toHaveLength(1);
+	});
+
+	it('renders the role sub-line from content, not just the org name (F5 fix)', () => {
+		const { body } = render(Page, { props: { data: DATA } });
+		expect(body).toContain('creceré · ai debt-recovery startup · 20 → 600 calls/min');
 	});
 });

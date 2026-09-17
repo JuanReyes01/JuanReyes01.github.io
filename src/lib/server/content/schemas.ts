@@ -19,6 +19,11 @@ export const experienceFrontmatterSchema = z
 		id: nonEmptyString,
 		title: nonEmptyString,
 		org: nonEmptyString,
+		/** F5 (sveltekit-migration apply-fix batch): the legacy row sub-line
+		    shown under the title (e.g. "creceré · ai debt-recovery startup ·
+		    20 → 600 calls/min") — richer than `org` alone, optional since it
+		    duplicates `org` verbatim for a couple of entries. */
+		sub: nonEmptyString.optional(),
 		summary: nonEmptyString,
 		start: monthString,
 		end: z.union([monthString, z.literal('present')]),

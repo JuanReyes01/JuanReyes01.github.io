@@ -2,6 +2,7 @@
 id: bs
 title: 'B.S. Electronics + B.S. Systems Eng.'
 org: 'Universidad de los Andes'
+sub: 'universidad de los andes · graduated oct 2025 · gpa 4.16 / 5.0'
 summary: 'Two degrees at once, graduated with a 4.16/5.0 GPA.'
 start: '2019-08'
 end: '2025-10'

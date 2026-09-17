@@ -117,7 +117,7 @@
 			<Row
 				index={i + 1}
 				title={role.title}
-				sub={role.org.toLowerCase()}
+				sub={role.sub}
 				lane={role.id}
 				onactivate={() => handle?.focusLane(role.id)}
 				ondeactivate={() => handle?.focusLane(null)}

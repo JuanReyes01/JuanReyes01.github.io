@@ -60,6 +60,19 @@ describe('experienceFrontmatterSchema', () => {
 			}).success
 		).toBe(false);
 	});
+
+	it('accepts an optional `sub` line (F5 fix — the row sub-line shown under the title)', () => {
+		expect(
+			experienceFrontmatterSchema.safeParse({
+				...valid,
+				sub: 'creceré · ai debt-recovery startup · 20 → 600 calls/min'
+			}).success
+		).toBe(true);
+	});
+
+	it('accepts an entry with no `sub` (optional field)', () => {
+		expect(experienceFrontmatterSchema.safeParse(valid).success).toBe(true);
+	});
 });
 
 describe('workFrontmatterSchema', () => {
