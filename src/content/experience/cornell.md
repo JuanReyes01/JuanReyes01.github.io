@@ -2,6 +2,7 @@
 id: cornell
 title: 'Research Intern'
 org: 'Cornell University'
+sub: 'cornell university · generative models'
 summary: 'Human-preference alignment and controlled generation.'
 start: '2024-06'
 end: '2024-08'

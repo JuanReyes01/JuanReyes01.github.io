@@ -2,6 +2,7 @@
 id: ra
 title: 'Research Assistant'
 org: 'Universidad de los Andes · Faculty of Economics'
+sub: 'universidad de los andes · faculty of economics'
 summary: 'Argumentation mining over a 100k+ article opinion corpus.'
 start: '2024-09'
 end: '2025-12'

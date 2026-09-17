@@ -2,6 +2,7 @@
 id: ml
 title: 'Machine Learning Engineer'
 org: 'Creceré'
+sub: 'creceré · voice agents · transcript analytics'
 summary: 'Voice agents and transcript analytics for CreditBay.'
 start: '2025-05'
 end: '2026-02'
