@@ -43,8 +43,8 @@ function fakeCanvas(width = 900, height = 140) {
 	};
 }
 
-function makeEngine(reduced: boolean, width = 900) {
-	const { canvas, putCount, lastImage } = fakeCanvas(width);
+function makeEngine(reduced: boolean, width = 900, height = 140) {
+	const { canvas, putCount, lastImage } = fakeCanvas(width, height);
 	const engine = new BandEngine({ canvas, tokens: TOKENS, reduced });
 	engine.resize();
 	return { engine, putCount, lastImage };
@@ -134,6 +134,37 @@ describe('BandEngine', () => {
 			const { engine: b, lastImage: imageB } = makeEngine(true);
 			b.draw(999999);
 			expect(Array.from(imageB()!.data)).toEqual(Array.from(imageA()!.data));
+		});
+
+		// design #4938 item 6 ("the theme is ASCII ART, but super advanced"):
+		// the band is a raw pixel/dither raster (one canvas pixel per dither
+		// cell — too fine for legible text glyphs), so "shapes read as drawn"
+		// here means the SAME gradient technique the directional-glyph engine
+		// uses (fields/glyphs.ts's sampleGradient), applied to force a crisp,
+		// fully-opaque outline right at the bird's own silhouette boundary,
+		// instead of leaving translucent wing/farwing/ghost parts to fade
+		// into whatever partial alpha the dither field underneath happened
+		// to leave. Coordinates below were found by scanning this exact
+		// deterministic reduced-motion frame (900x258 -> 300x86 grid, seedT
+		// 4.2) for a real silhouette-edge cell and a real deep-interior
+		// translucent cell, so this is a genuine behavioral assertion, not a
+		// tautology.
+		it('outlines the bird silhouette: a translucent wing cell right at the edge (adjacent to true exterior) renders fully opaque', () => {
+			const { engine, lastImage } = makeEngine(true, 900, 258);
+			engine.draw(0);
+			const data = lastImage()!.data;
+			const width = lastImage()!.width;
+			const i = (35 * width + 194) * 4;
+			expect(data[i + 3]).toBe(255);
+		});
+
+		it('keeps a deep-interior translucent cell (no adjacent exterior) at its natural partial alpha — the boost only fires at real edges', () => {
+			const { engine, lastImage } = makeEngine(true, 900, 258);
+			engine.draw(0);
+			const data = lastImage()!.data;
+			const width = lastImage()!.width;
+			const i = (19 * width + 203) * 4;
+			expect(data[i + 3]).toBe(115);
 		});
 	});
 });
