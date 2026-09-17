@@ -2,48 +2,51 @@ import { describe, it, expect } from 'vitest';
 import { readoutAt } from './readout';
 import { deriveTimeline } from './timeline';
 import { parseMonth } from './month';
-import type { TimelineInput } from './types';
+import { REAL_ENTRIES, TODAY } from './fixtures';
 
 const m = parseMonth;
-const ENTRIES: TimelineInput[] = [
-	{
-		id: 'ml',
-		start: m('2025-05'),
-		end: m('2026-02'),
-		lane: { label: 'Machine Learning Engineer', short: 'ml eng', color: 'yellow' },
-		events: [{ at: m('2025-05'), text: 'Machine Learning Engineer — Creceré' }]
-	},
-	{
-		id: 'caio',
-		start: m('2026-02'),
-		end: 'present',
-		promotedFrom: 'ml',
-		lane: { label: 'Chief AI Officer', short: 'chief ai', color: 'pink' },
-		events: [{ at: m('2026-02'), text: 'Promoted to Chief AI Officer — Creceré' }]
-	}
-];
-const timeline = deriveTimeline(ENTRIES, m('2026-09'));
+const timeline = deriveTimeline(REAL_ENTRIES, TODAY);
 
 describe('readoutAt', () => {
-	it('reports the active lane and its most recent event at the current head (matches the legacy readout)', () => {
-		const r = readoutAt(timeline, m('2026-09'));
-		expect(r).toEqual({
-			date: '2026-09',
-			laneId: 'caio',
-			text: 'Promoted to Chief AI Officer — Creceré'
-		});
+	it('picks the Cornell event the month it starts', () => {
+		const r = readoutAt(timeline, m('2024-06'));
+		expect(r.laneId).toBe('cornell');
+		expect(r.text).toBe('Research intern at Cornell — preference alignment, StyleGAN2');
 	});
 
-	it('reports the earlier lane and event for a month before the promotion', () => {
-		const r = readoutAt(timeline, m('2025-08'));
-		expect(r).toEqual({
-			date: '2025-08',
-			laneId: 'ml',
-			text: 'Machine Learning Engineer — Creceré'
-		});
+	it('picks the research-assistant event once it starts, even though B.S. and Cornell lanes are still open', () => {
+		const r = readoutAt(timeline, m('2024-09'));
+		expect(r.laneId).toBe('ra');
+		expect(r.text).toBe('Research assistant at Uniandes Economics — argument mining');
 	});
 
-	it('returns null when the month falls before the timeline epoch', () => {
-		expect(readoutAt(timeline, m('2019-01'))).toBeNull();
+	it('picks the ML engineer event once it starts', () => {
+		const r = readoutAt(timeline, m('2025-05'));
+		expect(r.laneId).toBe('ml');
+		expect(r.text).toBe('Joined Creceré as ML engineer — voice agents on ElevenLabs');
+	});
+
+	it("picks the B.S. graduation event over the still-open ML lane's earlier event", () => {
+		const r = readoutAt(timeline, m('2025-10'));
+		expect(r.laneId).toBe('bs');
+		expect(r.text).toBe(
+			'Graduated from Universidad de los Andes — two B.S. degrees, GPA 4.16 / 5.0'
+		);
+	});
+
+	it('picks the CAIO promotion exactly on its boundary month', () => {
+		const r = readoutAt(timeline, m('2026-02'));
+		expect(r.laneId).toBe('caio');
+		expect(r.text).toBe('Promoted to Chief AI Officer — CreditBay');
+	});
+
+	it('reports every lane active that month as chips, independent of which event is latest', () => {
+		const r = readoutAt(timeline, m('2024-07'));
+		expect(r.chips.sort()).toEqual(['bs', 'cornell'].sort());
+	});
+
+	it('returns a null lane and empty text for a month before any event, with no active chips', () => {
+		const r = readoutAt(timeline, m('2019-01'));
+		expect(r).toEqual({ date: '2019-01', laneId: null, text: '', chips: [] });
 	});
 });
