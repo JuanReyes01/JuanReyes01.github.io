@@ -9,7 +9,9 @@ import {
 	workEntries,
 	postEntries,
 	homePage,
-	fieldPage
+	fieldPage,
+	sortWorkForDisplay,
+	sortExperienceForDisplay
 } from './collections';
 
 function md(frontmatter: Record<string, unknown>, body = 'Body.'): string {
@@ -175,6 +177,36 @@ describe('loadHomePageFiles / loadFieldPageFiles', () => {
 			})
 		});
 		expect(entry.data.stations).toHaveLength(1);
+	});
+});
+
+describe('sortWorkForDisplay', () => {
+	const base = {
+		title: 'CreditBay',
+		summary: 'A debt-recovery platform.',
+		stack: ['python'],
+		metric: { value: '1', label: 'x' },
+		problem: 'p',
+		decisions: ['d'],
+		results: [{ value: '1', label: 'x' }]
+	};
+
+	it('orders entries by build number ascending, regardless of slug order (legacy row order)', () => {
+		const entries = loadWorkFiles({
+			'/src/content/work/b.md': md({ ...base, build: 2 }),
+			'/src/content/work/a.md': md({ ...base, build: 1 })
+		});
+		expect(sortWorkForDisplay(entries).map((e) => e.data.build)).toEqual([1, 2]);
+	});
+});
+
+describe('sortExperienceForDisplay', () => {
+	it('orders entries most-recent-start-first (legacy row order)', () => {
+		const entries = loadExperienceFiles({
+			'/src/content/experience/ml.md': VALID_ML,
+			'/src/content/experience/caio.md': VALID_CAIO
+		});
+		expect(sortExperienceForDisplay(entries).map((e) => e.data.id)).toEqual(['caio', 'ml']);
 	});
 });
 
