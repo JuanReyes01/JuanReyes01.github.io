@@ -65,6 +65,23 @@ export function tokenRgba(hex: string, alpha: number): string {
 	return `rgba(${r},${g},${b},${alpha})`;
 }
 
+/**
+ * The inverse of {@link tokenRgba}/`resolveSkyColor`: parses either a hex
+ * color or an `rgba(r,g,b,a)`/`rgb(r,g,b)` string back into numeric channels.
+ * The field band's hummingbird overlay (design #4938 slice S2) needs real
+ * channel math to alpha-composite over its `ImageData` buffer, not another
+ * string to hand the canvas API.
+ */
+export function parseCssColor(value: string): { r: number; g: number; b: number; a: number } {
+	const match = value.match(/^rgba?\(([^)]+)\)$/);
+	if (match) {
+		const [r, g, b, a = 1] = match[1].split(',').map((part) => parseFloat(part.trim()));
+		return { r, g, b, a };
+	}
+	const [r, g, b] = hexToRgb(value);
+	return { r, g, b, a: 1 };
+}
+
 interface MediaQueryLike {
 	matches: boolean;
 	addEventListener(type: 'change', callback: () => void): void;

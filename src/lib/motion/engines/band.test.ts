@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { BandEngine } from './band';
+import { BandEngine, computeBirdAnchor } from './band';
+import { hexToRgb } from '../runtime/tokens';
 import type { Engine } from '../runtime/canvas-action';
 import type { Tokens } from '../runtime/tokens';
 
@@ -104,5 +105,67 @@ describe('BandEngine', () => {
 		}
 		expect(lit).toBeGreaterThan(0);
 		expect(dark).toBeGreaterThan(0);
+	});
+
+	// design #4938 slice S2: the hummingbird moves from the hero to `/field/`,
+	// drawn directly into the band's own grid so band + bird share one canvas.
+	describe('the hummingbird (design #4938 slice S2)', () => {
+		it('draws a gorget pixel — pink/magenta, colors the ambient iridescent field never produces (only green/cyan/blue inks) — proving the bird is actually composited in', () => {
+			const { engine, lastImage } = makeEngine(false, 900);
+			engine.draw(0);
+			const data = lastImage()!.data;
+			const [pr, pg, pb] = hexToRgb(TOKENS.pink);
+			const [mr, mg, mb] = hexToRgb(TOKENS.magenta);
+			let found = false;
+			for (let i = 0; i < data.length; i += 4) {
+				const isPink = data[i] === pr && data[i + 1] === pg && data[i + 2] === pb;
+				const isMagenta = data[i] === mr && data[i + 1] === mg && data[i + 2] === mb;
+				if ((isPink || isMagenta) && data[i + 3] === 255) {
+					found = true;
+					break;
+				}
+			}
+			expect(found).toBe(true);
+		});
+
+		it('keeps rendering deterministically under reduced motion with the bird composited in', () => {
+			const { engine: a, lastImage: imageA } = makeEngine(true);
+			a.draw(0);
+			const { engine: b, lastImage: imageB } = makeEngine(true);
+			b.draw(999999);
+			expect(Array.from(imageB()!.data)).toEqual(Array.from(imageA()!.data));
+		});
+	});
+});
+
+describe('computeBirdAnchor', () => {
+	it('scales the bird from the band size, not a fixed pixel size', () => {
+		const small = computeBirdAnchor(100, 40);
+		const big = computeBirdAnchor(200, 80);
+		expect(big.S).toBeCloseTo(small.S * 2);
+		expect(big.ax).toBeCloseTo(small.ax * 2);
+		expect(big.ay).toBeCloseTo(small.ay * 2);
+	});
+
+	it('keeps the whole hummingbird (including the flower, its leftmost/lowest reach) inside the grid at a realistic band size', () => {
+		const cols = 400;
+		const rows = 86;
+		const { S, ax, ay } = computeBirdAnchor(cols, rows);
+		// sampleBird's own early-exit bounding box (fields/bird.ts): x in
+		// [-1.45, 0.88], y in [-0.9, 1.02] — the true bird+flower extent.
+		expect(ax + -1.45 * S).toBeGreaterThan(0);
+		expect(ax + 0.88 * S).toBeLessThan(cols);
+		expect(ay + -0.9 * S).toBeGreaterThan(0);
+		expect(ay + 1.02 * S).toBeLessThan(rows);
+	});
+
+	it('keeps the bird comfortably inside the grid at a narrow (mobile) band size too', () => {
+		const cols = 200;
+		const rows = 80;
+		const { S, ax, ay } = computeBirdAnchor(cols, rows);
+		expect(ax + -1.45 * S).toBeGreaterThan(0);
+		expect(ax + 0.88 * S).toBeLessThan(cols);
+		expect(ay + -0.9 * S).toBeGreaterThan(0);
+		expect(ay + 1.02 * S).toBeLessThan(rows);
 	});
 });
