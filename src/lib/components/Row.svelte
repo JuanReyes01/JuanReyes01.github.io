@@ -13,6 +13,7 @@
 		variant = 'numbered',
 		scramble: scrambleEnabled = true,
 		aside,
+		tags,
 		details,
 		onactivate,
 		ondeactivate
@@ -30,7 +31,15 @@
 		    home page's now/how-I-work index lists). */
 		variant?: 'numbered' | 'bullet';
 		scramble?: boolean;
+		/** Renders in the row's own narrow trailing column (e.g. a date or a
+		    metric) — never use this for a wrapping tag list, see `tags`. */
 		aside?: Snippet;
+		/** F4 (sveltekit-migration apply-fix batch): a wrapping tag/label line
+		    under the title+desc, inside `.main` (legacy `.idx .m`) — unlike
+		    `aside`, this is NOT a separate grid column, so long or multiple
+		    tags wrap under the row's own text instead of overflowing the grid
+		    onto an unrelated implicit row. */
+		tags?: Snippet;
 		/** When given, the row becomes a native `<details>`/`<summary>` (the
 		    experience role rows' expandable highlights). */
 		details?: Snippet;
@@ -60,9 +69,10 @@
 		{/if}
 		{#if sub}<span class="sub">{sub}</span>{/if}
 		{#if desc}<span class="desc">{desc}</span>{/if}
+		{#if tags}<span class="tags">{@render tags()}</span>{/if}
 	</span>
-	{#if aside}{@render aside()}{/if}
-	{#if details}<span class="toggle" aria-hidden="true">+</span>{/if}
+	{#if aside}<span class="aside">{@render aside()}</span>{/if}
+	{#if details}<span class="toggle" aria-hidden="true"></span>{/if}
 {/snippet}
 
 <li class="row">
@@ -120,6 +130,13 @@
 		text-decoration: none;
 		cursor: default;
 	}
+	/* A row with `details` renders num | main | aside | toggle — four grid
+	   items — so it needs a fourth, narrow track for the toggle glyph.
+	   Without this the toggle overflows the 3-column grid onto its own
+	   implicit row (legacy `.row-grid.has-toggle`). */
+	.row-grid.has-toggle {
+		grid-template-columns: 2.6rem minmax(0, 1fr) auto 1rem;
+	}
 	a.row-grid {
 		cursor: pointer;
 	}
@@ -157,10 +174,24 @@
 		margin-top: 6px;
 		max-width: 64ch;
 	}
+	/* F4 (sveltekit-migration apply-fix batch): matches legacy `.idx .m` — a
+	   plain wrapping text line, not a grid column, so tags never overflow
+	   sideways out of the row. */
+	.tags {
+		display: block;
+		font-family: var(--font-mono);
+		font-size: var(--fs-xs);
+		color: var(--muted);
+		margin-top: 4px;
+	}
 	.toggle {
 		font-family: var(--font-mono);
 		color: var(--pc, var(--cyan));
 		font-weight: 700;
+		text-align: right;
+	}
+	.toggle::before {
+		content: '+';
 	}
 	details[open] .toggle::before {
 		content: '−';
@@ -185,5 +216,35 @@
 	[data-row]:focus .title,
 	[data-row]:focus-visible .title {
 		color: var(--pc, var(--cyan));
+	}
+
+	/* F3 (sveltekit-migration apply-fix batch): legacy narrow-viewport rule
+	   (index.html `.row-grid` @media 760px) — the aside content (date/metric)
+	   drops to a second line under the title while num/main/toggle stay put
+	   on row 1, instead of squeezing into (or overflowing out of) a wide
+	   `auto` column that no longer fits at this width. */
+	@media (max-width: 760px) {
+		.row-grid,
+		.row-grid.has-toggle {
+			grid-template-columns: 2.4rem minmax(0, 1fr) 1rem;
+		}
+		.row-grid > .num {
+			grid-column: 1;
+			grid-row: 1;
+		}
+		.row-grid > .main {
+			grid-column: 2;
+			grid-row: 1;
+		}
+		.row-grid > .toggle {
+			grid-column: 3;
+			grid-row: 1;
+		}
+		.row-grid > .aside {
+			grid-column: 2;
+			grid-row: 2;
+			text-align: left;
+			margin-top: 6px;
+		}
 	}
 </style>
