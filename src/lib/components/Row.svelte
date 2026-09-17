@@ -3,41 +3,106 @@
 	import { scramble } from '$lib/motion/actions/scramble';
 	import { isReducedMotion } from '$lib/motion/runtime/browser';
 
-	// Numbered variant only (this batch's scope). The `href` (work
-	// case-study links) and `details` (timeline expand/collapse) variants
-	// from the design's Row contract are deferred to the PR that actually
-	// renders that content (Phase 3/5) — building them unexercised here
-	// would add unverified surface area for no current caller.
 	let {
 		index,
 		title,
 		sub,
 		desc,
-		aside
+		href,
+		lane,
+		variant = 'numbered',
+		scramble: scrambleEnabled = true,
+		aside,
+		details,
+		onactivate,
+		ondeactivate
 	}: {
-		index: number;
+		index?: number;
 		title: string;
 		sub?: string;
 		desc?: string;
+		/** Wraps the row in a link (e.g. a work index row -> its case study). */
+		href?: string;
+		/** Timeline lane id (design motion table): row hover/focus tells the
+		    timeline canvas action which lane to highlight via `data-lane`. */
+		lane?: string;
+		/** `bullet` renders a `›` glyph instead of a zero-padded number (the
+		    home page's now/how-I-work index lists). */
+		variant?: 'numbered' | 'bullet';
+		scramble?: boolean;
 		aside?: Snippet;
+		/** When given, the row becomes a native `<details>`/`<summary>` (the
+		    experience role rows' expandable highlights). */
+		details?: Snippet;
+		onactivate?: () => void;
+		ondeactivate?: () => void;
 	} = $props();
 
-	const num = $derived(String(index).padStart(2, '0'));
+	const num = $derived(index !== undefined ? String(index).padStart(2, '0') : undefined);
 </script>
 
-<li class="row">
-	<div class="row-grid" data-row>
-		<span class="num">{num}</span>
-		<span class="main">
-			<span class="sr-only">{title}</span>
+{#snippet mainContent()}
+	<span class="num">
+		{#if variant === 'bullet'}
+			<span aria-hidden="true">›</span>
+		{:else}
+			{num}
+		{/if}
+	</span>
+	<span class="main">
+		<span class="sr-only">{title}</span>
+		{#if scrambleEnabled}
 			<span class="title raw-glyphs" aria-hidden="true" use:scramble={{ reduced: isReducedMotion }}
 				>{title}</span
 			>
-			{#if sub}<span class="sub">{sub}</span>{/if}
-			{#if desc}<span class="desc">{desc}</span>{/if}
-		</span>
-		{#if aside}{@render aside()}{/if}
-	</div>
+		{:else}
+			<span class="title raw-glyphs" aria-hidden="true">{title}</span>
+		{/if}
+		{#if sub}<span class="sub">{sub}</span>{/if}
+		{#if desc}<span class="desc">{desc}</span>{/if}
+	</span>
+	{#if aside}{@render aside()}{/if}
+	{#if details}<span class="toggle" aria-hidden="true">+</span>{/if}
+{/snippet}
+
+<li class="row">
+	{#if details}
+		<details>
+			<summary
+				class="row-grid has-toggle"
+				data-row
+				data-lane={lane}
+				onmouseenter={onactivate}
+				onmouseleave={ondeactivate}
+				onfocusin={onactivate}
+				onfocusout={ondeactivate}
+			>
+				{@render mainContent()}
+			</summary>
+			<div class="more">{@render details()}</div>
+		</details>
+	{:else if href}
+		<!-- eslint-disable svelte/no-navigation-without-resolve -- href is caller-provided (internal case-study/route links); resolving here would require every caller to pre-resolve instead -->
+		<a
+			class="row-grid"
+			data-row
+			data-lane={lane}
+			{href}
+			onmouseenter={onactivate}
+			onmouseleave={ondeactivate}
+			onfocusin={onactivate}
+			onfocusout={ondeactivate}
+		>
+			{@render mainContent()}
+		</a>
+		<!-- eslint-enable svelte/no-navigation-without-resolve -->
+	{:else}
+		<!-- No href/details: a plain data row (e.g. a build's metric row, or a
+		     now/how-I-work index item) with nothing to focus or hover-activate. -->
+		<div class="row-grid" data-row data-lane={lane}>
+			{@render mainContent()}
+		</div>
+	{/if}
 </li>
 
 <style>
@@ -51,6 +116,19 @@
 		column-gap: 14px;
 		align-items: baseline;
 		padding: 13px 8px;
+		color: inherit;
+		text-decoration: none;
+		cursor: default;
+	}
+	a.row-grid {
+		cursor: pointer;
+	}
+	summary.row-grid {
+		cursor: pointer;
+		list-style: none;
+	}
+	summary.row-grid::-webkit-details-marker {
+		display: none;
 	}
 	.num {
 		font-family: var(--font-mono);
@@ -79,12 +157,33 @@
 		margin-top: 6px;
 		max-width: 64ch;
 	}
-	[data-row]:focus {
+	.toggle {
+		font-family: var(--font-mono);
+		color: var(--pc, var(--cyan));
+		font-weight: 700;
+	}
+	details[open] .toggle::before {
+		content: '−';
+	}
+	.more {
+		padding: 0 8px 16px 2.6rem;
+		color: var(--fg-2);
+	}
+	.more :global(ul) {
+		margin: 0;
+		padding-left: 1.1em;
+	}
+	.more :global(li) {
+		margin: 6px 0;
+	}
+	[data-row]:focus,
+	[data-row]:focus-visible {
 		background: color-mix(in srgb, var(--pc, var(--cyan)) 12%, transparent);
 		box-shadow: inset 2px 0 0 var(--pc, var(--cyan));
 		outline: none;
 	}
-	[data-row]:focus .title {
+	[data-row]:focus .title,
+	[data-row]:focus-visible .title {
 		color: var(--pc, var(--cyan));
 	}
 </style>
