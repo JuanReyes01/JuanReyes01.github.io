@@ -24,6 +24,10 @@ const STATIC_T = 4.2;
 const texturePrimary = makeTexture(90210);
 const textureShimmer = makeTexture(1337);
 
+/** Alternating-row scanline dimming (legacy pane-header `Strip.prototype.draw`'s
+ * `scan = (y & 1) ? 0.7 : 1`, also matched by `BandEngine`'s `SCANLINE_DIM`). */
+const SCANLINE_DIM = 0.7;
+
 /**
  * A `rows`-by-`cols` grid of lit/unlit dots, sampled once at a fixed instant.
  * Deterministic — calling this twice with the same size produces the exact
@@ -33,6 +37,7 @@ const textureShimmer = makeTexture(1337);
 export function stripDots(cols: number, rows: number): boolean[][] {
 	const grid: boolean[][] = [];
 	for (let y = 0; y < rows; y++) {
+		const scanline = y % 2 === 1 ? SCANLINE_DIM : 1;
 		const row: boolean[] = [];
 		for (let x = 0; x < cols; x++) {
 			const { value } = iridescentField(
@@ -42,9 +47,27 @@ export function stripDots(cols: number, rows: number): boolean[][] {
 				y,
 				STATIC_T
 			);
-			row.push(passesDither(value, x, y));
+			row.push(passesDither(value * scanline, x, y));
 		}
 		grid.push(row);
 	}
 	return grid;
+}
+
+/**
+ * Flattens {@link stripDots} into a single SVG `<path>` `d` attribute: one
+ * tiny `1x1` square per lit cell (`M{x} {y}h1v1h-1z`), in cell-index units
+ * (not physical pixels) so every coordinate is a short integer. One `<path>`
+ * scales far better than one `<rect>` per dot once the grid is sampled at a
+ * real dither resolution (hundreds of cells) instead of a coarse ~40x10 one.
+ */
+export function stripPath(cols: number, rows: number): string {
+	const grid = stripDots(cols, rows);
+	let d = '';
+	for (let y = 0; y < rows; y++) {
+		for (let x = 0; x < cols; x++) {
+			if (grid[y][x]) d += `M${x} ${y}h1v1h-1z`;
+		}
+	}
+	return d;
 }

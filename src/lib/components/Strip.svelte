@@ -9,28 +9,38 @@
 	 * every lit dot with the current section's `--pc` accent (set by the
 	 * `[data-section]` rule in `styles/tokens.css`), so it never needs a
 	 * `section` prop of its own.
+	 *
+	 * Defaults sample a real dither resolution (legacy's pane-header `Strip`
+	 * used `cell = 2` CSS px; at a typical ~600x60 header row that's ~300x30
+	 * cells) instead of a coarse handful — a coarse grid stretched into
+	 * ~12px blocky squares once scaled up to a real header's size, nothing
+	 * like the legacy texture. Every dot is emitted into ONE `<path>` (not
+	 * one `<rect>` per dot) so the element count stays flat regardless of
+	 * grid resolution.
+	 *
+	 * Responsive strategy: a FIXED viewBox with `preserveAspectRatio="xMidYMid
+	 * slice"` (not `"none"`, which stretches cells into rectangles). `slice`
+	 * scales the pattern uniformly to fully cover whatever box CSS gives this
+	 * SVG, cropping the overflow on whichever axis runs long — dots stay
+	 * perfectly square at every viewport width, matching how the `/field`
+	 * band already fills its box edge-to-edge.
 	 */
-	import { stripDots } from '$lib/motion/fields/strip';
+	import { stripPath } from '$lib/motion/fields/strip';
 
-	let { cols = 48, rows = 10 }: { cols?: number; rows?: number } = $props();
+	let { cols = 300, rows = 30 }: { cols?: number; rows?: number } = $props();
 
-	const grid = $derived(stripDots(cols, rows));
+	const d = $derived(stripPath(cols, rows));
 </script>
 
 <svg
 	class="strip"
 	viewBox="0 0 {cols} {rows}"
-	preserveAspectRatio="none"
+	preserveAspectRatio="xMidYMid slice"
+	shape-rendering="crispEdges"
 	aria-hidden="true"
 	focusable="false"
 >
-	{#each grid as row, y (y)}
-		{#each row as lit, x (x)}
-			{#if lit}
-				<rect class="dot" {x} {y} width="1" height="1" />
-			{/if}
-		{/each}
-	{/each}
+	<path class="dot" {d} />
 </svg>
 
 <style>
@@ -39,6 +49,7 @@
 		width: 100%;
 		height: 100%;
 		min-width: 0;
+		overflow: hidden;
 	}
 	.dot {
 		fill: var(--pc, var(--cyan));
