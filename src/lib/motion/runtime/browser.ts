@@ -6,31 +6,49 @@
  * This file is intentionally untested glue; the logic it wires together is
  * fully covered in `scheduler.test.ts`, `tokens.test.ts`,
  * `reduced-motion.test.ts` and `canvas-action.test.ts`.
+ *
+ * Every singleton below is created lazily, on first use, rather than at
+ * module top-level. Svelte actions (`use:sky`, etc.) are never invoked
+ * during SSR, but the *modules* that define them are still imported by the
+ * server bundle during prerendering — eagerly calling `window.matchMedia`
+ * or `getComputedStyle` at import time would crash the build. Lazy getters
+ * keep this module side-effect-free until an action actually runs client-side.
  */
 import { createBrowserClock, Scheduler } from './scheduler';
-import { createThemeWatcher } from './tokens';
-import { createReducedMotionWatcher } from './reduced-motion';
+import { createThemeWatcher, type ThemeWatcher } from './tokens';
+import { createReducedMotionWatcher, type ReducedMotionWatcher } from './reduced-motion';
 import type { CanvasActionDeps } from './canvas-action';
 
 /** The box-drawing/arrow glyphs the timeline and hero canvases draw (design D12/D14). */
 const CANVAS_GLYPHS = '━┼│╰╯╮●';
 
-export const scheduler = new Scheduler(createBrowserClock());
+let sharedScheduler: Scheduler | null = null;
+function getScheduler(): Scheduler {
+	return (sharedScheduler ??= new Scheduler(createBrowserClock()));
+}
 
-export const themeWatcher = createThemeWatcher({
-	readVar: (name) => getComputedStyle(document.documentElement).getPropertyValue(name),
-	matchDarkScheme: () => window.matchMedia('(prefers-color-scheme: dark)'),
-	observeAttribute: (onChange) => {
-		const observer = new MutationObserver(onChange);
-		observer.observe(document.documentElement, {
-			attributes: true,
-			attributeFilter: ['data-theme']
-		});
-		return () => observer.disconnect();
-	}
-});
+let sharedThemeWatcher: ThemeWatcher | null = null;
+function getThemeWatcher(): ThemeWatcher {
+	return (sharedThemeWatcher ??= createThemeWatcher({
+		readVar: (name) => getComputedStyle(document.documentElement).getPropertyValue(name),
+		matchDarkScheme: () => window.matchMedia('(prefers-color-scheme: dark)'),
+		observeAttribute: (onChange) => {
+			const observer = new MutationObserver(onChange);
+			observer.observe(document.documentElement, {
+				attributes: true,
+				attributeFilter: ['data-theme']
+			});
+			return () => observer.disconnect();
+		}
+	}));
+}
 
-export const reducedMotionWatcher = createReducedMotionWatcher((query) => window.matchMedia(query));
+let sharedReducedMotionWatcher: ReducedMotionWatcher | null = null;
+function getReducedMotionWatcher(): ReducedMotionWatcher {
+	return (sharedReducedMotionWatcher ??= createReducedMotionWatcher((query) =>
+		window.matchMedia(query)
+	));
+}
 
 async function loadFonts(): Promise<void> {
 	if (typeof document === 'undefined' || !document.fonts) return;
@@ -68,9 +86,9 @@ function createVisibilityObserver(onChange: (visible: boolean) => void) {
 /** The real browser deps for `createCanvasAction`, shared by every engine's action. */
 export function browserCanvasActionDeps(): CanvasActionDeps {
 	return {
-		scheduler,
-		themeWatcher,
-		reducedMotionWatcher,
+		scheduler: getScheduler(),
+		themeWatcher: getThemeWatcher(),
+		reducedMotionWatcher: getReducedMotionWatcher(),
 		loadFonts,
 		now: () => performance.now(),
 		createResizeObserver: createRafCoalescedResizeObserver,
