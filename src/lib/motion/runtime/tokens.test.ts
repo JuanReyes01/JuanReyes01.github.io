@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { createThemeWatcher, hexToRgb, parseTokens, tokenRgba } from './tokens';
+import { createThemeWatcher, hexToRgb, parseCssColor, parseTokens, tokenRgba } from './tokens';
 
 describe('parseTokens', () => {
 	it('reads every design token by its CSS custom property name', () => {
@@ -58,6 +58,20 @@ describe('hexToRgb', () => {
 describe('tokenRgba', () => {
 	it('formats a hex token as an rgba() string with the given alpha', () => {
 		expect(tokenRgba('#2fe0c6', 0.6)).toBe('rgba(47,224,198,0.6)');
+	});
+});
+
+describe('parseCssColor', () => {
+	it('parses a hex color to fully-opaque channels', () => {
+		expect(parseCssColor('#2fe0c6')).toEqual({ r: 47, g: 224, b: 198, a: 1 });
+	});
+
+	it('parses an rgba() string produced by tokenRgba back into its channels', () => {
+		expect(parseCssColor('rgba(47,224,198,0.6)')).toEqual({ r: 47, g: 224, b: 198, a: 0.6 });
+	});
+
+	it('defaults alpha to 1 for a bare rgb() string', () => {
+		expect(parseCssColor('rgb(10,20,30)')).toEqual({ r: 10, g: 20, b: 30, a: 1 });
 	});
 });
 

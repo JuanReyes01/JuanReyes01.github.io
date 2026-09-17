@@ -51,4 +51,11 @@ describe('field page (/field/)', () => {
 		const { body } = render(Page, { props: { data: DATA } });
 		expect(body).toMatch(/<canvas aria-hidden="true"/);
 	});
+
+	// design #4938 slice S2: the hummingbird moved here from the home hero,
+	// drawn into the band's own grid — one canvas, not a second one for the bird.
+	it('renders exactly one canvas — band and hummingbird share it', () => {
+		const { body } = render(Page, { props: { data: DATA } });
+		expect(body.match(/<canvas/g)).toHaveLength(1);
+	});
 });

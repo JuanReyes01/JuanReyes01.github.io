@@ -56,7 +56,10 @@
 <style>
 	.banner {
 		margin: 0;
-		height: 90px;
+		/* design D15's motion table ("Band /field"): the band is a tall
+		   protagonist, not a thin strip — also gives the hummingbird (design
+		   #4938 slice S2) enough vertical resolution to read clearly. */
+		height: clamp(160px, 24vw, 260px);
 		border: 1px solid var(--line);
 		border-radius: 4px;
 		overflow: hidden;
