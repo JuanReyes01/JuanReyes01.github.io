@@ -59,15 +59,13 @@ describe('sitemapRoutes', () => {
 	it('covers every fixed static page plus one route per work slug', () => {
 		const routes = sitemapRoutes(['creditbay', 'amd'], []);
 		expect(routes).toEqual(
-			expect.arrayContaining([
-				'/',
-				'/experience/',
-				'/work/',
-				'/field/',
-				'/work/creditbay/',
-				'/work/amd/'
-			])
+			expect.arrayContaining(['/', '/work/', '/field/', '/work/creditbay/', '/work/amd/'])
 		);
+	});
+
+	it('excludes the old /experience/ redirect stub (v2 direction slice S1: merged into /work/, no value indexing a page that just redirects)', () => {
+		const routes = sitemapRoutes(['creditbay'], []);
+		expect(routes).not.toContain('/experience/');
 	});
 
 	it('includes only published posts, excluding drafts, and excludes /writing/ itself', () => {

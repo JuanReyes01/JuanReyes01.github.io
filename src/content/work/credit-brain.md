@@ -1,6 +1,7 @@
 ---
 title: credit-brain
 build: 3
+lane: caio
 summary: 'A company-wide knowledge base you can ask how any part of the product works.'
 stack:
   - python

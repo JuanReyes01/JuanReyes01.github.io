@@ -1,6 +1,7 @@
 ---
 title: development-analytics
 build: 4
+lane: caio
 summary: 'A terminal app that measures how the team actually ships.'
 stack:
   - python

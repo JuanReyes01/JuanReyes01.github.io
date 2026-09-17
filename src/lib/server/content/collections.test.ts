@@ -129,6 +129,28 @@ describe('loadWorkFiles', () => {
 		});
 		expect(entries).toHaveLength(2);
 	});
+
+	it('accepts a `lane` that matches a known experience id', () => {
+		const entries = loadWorkFiles(
+			{ '/src/content/work/a.md': md({ ...base, build: 1, lane: 'caio' }) },
+			['caio', 'ra']
+		);
+		expect(entries[0].data.lane).toBe('caio');
+	});
+
+	it('throws, naming the file, when `lane` does not match any experience id', () => {
+		expect(() =>
+			loadWorkFiles({ '/src/content/work/a.md': md({ ...base, build: 1, lane: 'ghost' }) }, [
+				'caio'
+			])
+		).toThrow(/a\.md.*lane.*ghost/is);
+	});
+
+	it('allows omitting `lane` entirely, regardless of which experience ids are known', () => {
+		expect(() =>
+			loadWorkFiles({ '/src/content/work/a.md': md({ ...base, build: 1 }) }, [])
+		).not.toThrow();
+	});
 });
 
 describe('loadPostFiles', () => {
@@ -222,6 +244,20 @@ describe('production glob wrappers exercise the real content directory', () => {
 		const builds = entries.map((e) => e.data.build);
 		expect(new Set(builds).size).toBe(builds.length);
 		expect(entries.length).toBeGreaterThanOrEqual(5);
+	});
+
+	it('maps every real build to the experience id of the career period it belongs to (v2 direction slice S1): CreditBay, Automatic Machine Detection, credit-brain and development-analytics to the Creceré/CAIO period; the opinion corpus to the Uniandes research-assistant period', () => {
+		const byLane = Object.fromEntries(workEntries().map((e) => [e.slug, e.data.lane]));
+		expect(byLane.creditbay).toBe('caio');
+		expect(byLane.amd).toBe('caio');
+		expect(byLane['credit-brain']).toBe('caio');
+		expect(byLane['development-analytics']).toBe('caio');
+		expect(byLane['opinion-corpus']).toBe('ra');
+
+		const experienceIds = new Set(experienceEntries().map((e) => e.data.id));
+		for (const lane of Object.values(byLane)) {
+			if (lane) expect(experienceIds.has(lane)).toBe(true);
+		}
 	});
 
 	it('all real post content validates (empty collection is fine)', () => {

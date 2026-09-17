@@ -1,6 +1,7 @@
 ---
 title: CreditBay
 build: 1
+lane: caio
 summary: 'A debt-recovery platform where AI voice agents make the calls.'
 stack:
   - python

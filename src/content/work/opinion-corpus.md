@@ -1,6 +1,7 @@
 ---
 title: 'Opinion corpus + argument mining'
 build: 5
+lane: ra
 summary: 'A scraping and normalization pipeline for opinion journalism, plus models that tag claims and premises.'
 stack:
   - selenium

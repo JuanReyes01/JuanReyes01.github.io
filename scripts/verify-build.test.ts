@@ -5,7 +5,8 @@ import {
 	sitemapLocPaths,
 	checkSitemapUrlsHaveFiles,
 	hasClientBundle,
-	checkNoClientBundle
+	checkNoClientBundle,
+	excludeWorkIndex
 } from './verify-build';
 
 describe('checkCname', () => {
@@ -76,6 +77,18 @@ describe('hasClientBundle', () => {
 		// component CSS from `_app/immutable/assets/*.css` — that's not JS.
 		const html = '<link href="/_app/immutable/assets/Row.abc123.css" rel="stylesheet">';
 		expect(hasClientBundle(html)).toBe(false);
+	});
+});
+
+describe('excludeWorkIndex', () => {
+	it('drops the work index page (it ships the timeline canvas since v2 direction slice S1) but keeps every case study', () => {
+		const paths = ['work/index.html', 'work/creditbay/index.html', 'work/amd/index.html'];
+		expect(excludeWorkIndex(paths)).toEqual(['work/creditbay/index.html', 'work/amd/index.html']);
+	});
+
+	it('is a no-op when the work index page is absent from the list', () => {
+		const paths = ['work/creditbay/index.html'];
+		expect(excludeWorkIndex(paths)).toEqual(paths);
 	});
 });
 
