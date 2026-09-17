@@ -1,5 +1,7 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
+	import { scramble } from '$lib/motion/actions/scramble';
+	import { isReducedMotion } from '$lib/motion/runtime/browser';
 
 	// Numbered variant only (this batch's scope). The `href` (work
 	// case-study links) and `details` (timeline expand/collapse) variants
@@ -28,7 +30,9 @@
 		<span class="num">{num}</span>
 		<span class="main">
 			<span class="sr-only">{title}</span>
-			<span class="title raw-glyphs" aria-hidden="true">{title}</span>
+			<span class="title raw-glyphs" aria-hidden="true" use:scramble={{ reduced: isReducedMotion }}
+				>{title}</span
+			>
 			{#if sub}<span class="sub">{sub}</span>{/if}
 			{#if desc}<span class="desc">{desc}</span>{/if}
 		</span>
