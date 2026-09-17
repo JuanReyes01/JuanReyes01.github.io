@@ -61,6 +61,16 @@ describe('experience events (verbatim legacy copy)', () => {
 		]);
 	});
 
+	it('uses the legacy timeline lane labels: org-qualified when wide, bare when narrow', () => {
+		const lanes = Object.fromEntries(experienceEntries().map((e) => [e.data.id, e.data.lane]));
+
+		expect(lanes.bs).toMatchObject({ label: 'b.s. ×2 · uniandes', short: 'b.s. ×2' });
+		expect(lanes.cornell).toMatchObject({ label: 'research · cornell', short: 'cornell' });
+		expect(lanes.ra).toMatchObject({ label: 'research · uniandes', short: 'research' });
+		expect(lanes.ml).toMatchObject({ label: 'ml eng · creceré', short: 'ml eng' });
+		expect(lanes.caio).toMatchObject({ label: 'chief ai · creceré', short: 'chief ai' });
+	});
+
 	it('never mentions a handoff in any experience event', () => {
 		for (const entry of experienceEntries()) {
 			for (const event of entry.data.events) {

@@ -7,8 +7,8 @@ start: '2026-02'
 end: present
 promotedFrom: ml
 lane:
-  label: 'Chief AI Officer'
-  short: 'chief ai · creceré'
+  label: 'chief ai · creceré'
+  short: 'chief ai'
   color: pink
 events:
   - at: '2026-02'
