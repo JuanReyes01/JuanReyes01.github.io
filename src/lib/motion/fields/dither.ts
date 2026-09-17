@@ -25,3 +25,17 @@ export function bayerThreshold(x: number, y: number): number {
 export function passesDither(value: number, x: number, y: number): boolean {
 	return value > bayerThreshold(x, y);
 }
+
+/**
+ * A separate, smaller 4x4 dither table the hero sky mixes into its cloud
+ * field before quantizing to the ASCII ramp (legacy `B4`) — distinct from
+ * {@link BAYER_8X8}, which only the field band's pixel dithering uses.
+ */
+export const BAYER_4X4: readonly number[] = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
+
+/** The legacy hero field's `(B4[(y&3)*4+(x&3)] / 16 - 0.47)` dither offset, tiled every 4 cells. */
+export function ditherOffset4x4(x: number, y: number): number {
+	const col = ((x % 4) + 4) % 4;
+	const row = ((y % 4) + 4) % 4;
+	return BAYER_4X4[row * 4 + col] / 16 - 0.47;
+}
