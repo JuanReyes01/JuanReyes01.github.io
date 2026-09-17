@@ -14,12 +14,13 @@ export default defineConfig({
 			prerender: {
 				handleHttpError: ({ path, message }) => {
 					// TabBar (design-system shell, PR2) links to every section up
-					// front; /experience/, /work/ and /field/ don't exist as routes
-					// until Phase 5 of the sveltekit-migration SDD change lands.
+					// front; /experience/ and /field/ don't exist as routes yet — they
+					// land in the next Phase 5 slice, stacked on top of this one
+					// (/work/ and /work/[slug]/ already exist as of this PR).
 					// Downgrade only those known, temporary 404s to a warning so the
 					// prerender crawler doesn't fail the build; any other broken
 					// link still fails it.
-					const pendingRoutes = ['/experience/', '/work/', '/field/'];
+					const pendingRoutes = ['/experience/', '/field/'];
 					if (pendingRoutes.includes(path)) {
 						console.warn(`(pending route, lands in Phase 5) ${message}`);
 						return;
