@@ -5,6 +5,9 @@
  */
 export type Section = 'about' | 'experience' | 'work' | 'field' | 'writing';
 
+/** Canonical origin (design D9/build-deploy spec), used by SeoHead and the feeds. */
+export const SITE_URL = 'https://jreyes.dev';
+
 export interface TabConfig {
 	href: string;
 	label: string;
