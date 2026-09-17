@@ -89,6 +89,11 @@ export class SkyEngine implements Engine {
 		else if (this.cols && this.rows) this.ripple = this.freshRippleBuffers();
 	}
 
+	/** Unused: the shared scheduler's boolean visibility already gates
+	 * whether `draw()` runs at all (R1); the ambient sky has no separate
+	 * "start once past a ratio" behavior the way the timeline's intro does. */
+	setVisibility(): void {}
+
 	isSettled(): boolean {
 		// An ambient loop runs for as long as it's visible; only reduced
 		// motion's single static frame counts as "settled" (design D15).

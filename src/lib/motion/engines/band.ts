@@ -58,6 +58,11 @@ export class BandEngine implements Engine {
 		this.reduced = reduced;
 	}
 
+	/** Unused: the shared scheduler's boolean visibility already gates
+	 * whether `draw()` runs at all (R1); the ambient band has no separate
+	 * "start once past a ratio" behavior the way the timeline's intro does. */
+	setVisibility(): void {}
+
 	isSettled(): boolean {
 		return this.reduced;
 	}

@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { BandEngine } from './band';
+import type { Engine } from '../runtime/canvas-action';
 import type { Tokens } from '../runtime/tokens';
 
 const TOKENS: Tokens = {
@@ -70,6 +71,12 @@ describe('BandEngine', () => {
 	it('never settles while ambient (visible, not reduced)', () => {
 		const { engine } = makeEngine(false);
 		expect(engine.isSettled()).toBe(false);
+	});
+
+	it('setVisibility() is a no-op — the shared scheduler already gates visibility (R1)', () => {
+		const { engine } = makeEngine(false);
+		expect(() => (engine as Engine).setVisibility(true, 0.6)).not.toThrow();
+		expect(engine.isSettled()).toBe(false); // unaffected either way
 	});
 
 	it('is always settled under reduced motion (one static frame)', () => {

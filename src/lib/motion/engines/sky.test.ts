@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { SkyEngine, type MeasurableElement } from './sky';
+import type { Engine } from '../runtime/canvas-action';
 import type { Tokens } from '../runtime/tokens';
 
 const TOKENS: Tokens = {
@@ -84,6 +85,12 @@ describe('SkyEngine', () => {
 		const { engine: b, fillTextCallCount: countB } = makeEngine(true);
 		b.draw(999999);
 		expect(countB()).toBe(first);
+	});
+
+	it('setVisibility() is a no-op — the shared scheduler already gates visibility (R1)', () => {
+		const { engine } = makeEngine(false);
+		expect(() => (engine as Engine).setVisibility(true, 0.6)).not.toThrow();
+		expect(engine.isSettled()).toBe(false); // unaffected either way
 	});
 
 	it('poke() and setReduced() do not throw', () => {
