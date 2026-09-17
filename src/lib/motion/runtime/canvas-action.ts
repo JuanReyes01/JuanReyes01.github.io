@@ -132,7 +132,19 @@ export function createCanvasAction<P>(
 			// engine existed (fonts can resolve after the observer fires).
 			engine.setVisibility(lastVisible, lastVisibleRatio);
 			engine.resize();
-			engine.draw(deps.now());
+			try {
+				engine.draw(deps.now());
+			} catch (err) {
+				// This runs BEFORE `scheduler.add()` below, inside a `.then()`
+				// with no `.catch()` — an uncaught throw here used to reject
+				// that promise silently and skip `scheduler.add()` entirely,
+				// orphaning the engine forever: no future frame would ever
+				// draw it again, leaving its canvas permanently blank.
+				console.error(
+					'[canvas-action] initial draw() threw; registering anyway so future frames can recover',
+					err
+				);
+			}
 			unregisterScheduler = deps.scheduler.add(schedulable);
 		});
 

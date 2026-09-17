@@ -106,7 +106,16 @@ export class Scheduler {
 				// last frame — skip the wasted redraw instead of drawing it
 				// unconditionally just because some other engine is active.
 				if (engine.isSettled() && !forced) continue;
-				engine.draw(now);
+				try {
+					engine.draw(now);
+				} catch (err) {
+					// A bug in one engine (sky/timeline/band) must never take
+					// down the shared loop for every other engine on the page,
+					// nor prevent `this.kick()` below from ever running again —
+					// an uncaught throw here used to do exactly that, silently
+					// freezing every canvas on the page after a single bad frame.
+					console.error('[scheduler] engine.draw() threw; skipping it for this frame', err);
+				}
 				this.dirty.delete(engine);
 			}
 		}

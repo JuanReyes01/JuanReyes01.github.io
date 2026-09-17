@@ -154,6 +154,28 @@ describe('Scheduler', () => {
 		expect(clock.frameCount).toBe(1); // no engines left, no more frames requested
 	});
 
+	it('an engine that throws during draw() does not stop the scheduler from drawing other engines or rescheduling itself', () => {
+		const clock = fakeClock();
+		const scheduler = new Scheduler(clock);
+		const throwing = {
+			visible: true,
+			isSettled: () => false,
+			draw: () => {
+				throw new Error('boom');
+			}
+		};
+		const healthy = fakeEngine();
+		scheduler.add(throwing);
+		scheduler.add(healthy);
+		const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+		clock.tick(40);
+
+		expect(healthy.draws).toEqual([40]); // still drawn despite the other engine throwing first
+		expect(clock.frameCount).toBe(2); // still rescheduled for the next frame — not orphaned forever
+		errorSpy.mockRestore();
+	});
+
 	it('throttles draws to roughly frameMs by skipping ticks that arrive too soon', () => {
 		const clock = fakeClock();
 		const scheduler = new Scheduler(clock, 40);
