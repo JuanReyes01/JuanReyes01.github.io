@@ -5,18 +5,24 @@
 		art,
 		caption,
 		label,
-		footer
+		footer,
+		name
 	}: {
 		art: string;
 		caption: string;
 		/** Required — makes the diagram an accessible image with a text equivalent. */
 		label: string;
 		footer?: string;
+		/** Optional name prefix (e.g. a build's slug) rendered as `<b>name</b> — caption`. */
+		name?: string;
 	} = $props();
 </script>
 
 <figure class="block">
-	<figcaption class="block-bar">{caption}</figcaption>
+	<figcaption class="block-bar">
+		<!-- eslint-disable-next-line svelte/no-useless-mustaches -- the mustache keeps the space from being trimmed at the {#if} boundary -->
+		{#if name}<b>{name}</b>{' — '}{/if}{caption}
+	</figcaption>
 	<div class="scroll-x">
 		<!-- eslint-disable-next-line svelte/no-at-html-tags -- renderAsciiMarkup escapes HTML first, then only adds our own hl/hl2 spans -->
 		<pre class="ascii raw-glyphs" aria-label={label} role="img">{@html renderAsciiMarkup(art)}</pre>
