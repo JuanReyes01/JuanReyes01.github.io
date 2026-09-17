@@ -19,8 +19,14 @@ import { createThemeWatcher, type ThemeWatcher } from './tokens';
 import { createReducedMotionWatcher, type ReducedMotionWatcher } from './reduced-motion';
 import type { CanvasActionDeps } from './canvas-action';
 
-/** The box-drawing/arrow glyphs the timeline and hero canvases draw (design D12/D14). */
-const CANVAS_GLYPHS = '━┼│╰╯╮●';
+/**
+ * Every box-drawing/arrow/shape glyph the sky, timeline and band engines
+ * draw via the box-drawing font subset (design D12/D14) — grepped from
+ * `domain/git-graph.ts` (`━ ─ │ ┼ ┬ ┴ ╰ ╯ ╮ ●`) and `motion/engines/*`
+ * (`◉` in `timeline-visuals.ts`, `▼` in `timeline.ts`). All at weight 400,
+ * the only weight any canvas `ctx.font` string in this app requests (R4).
+ */
+const CANVAS_GLYPHS = '━─│┼┬┴╰╯╮●◉▼';
 
 let sharedScheduler: Scheduler | null = null;
 function getScheduler(): Scheduler {
@@ -50,24 +56,64 @@ function getReducedMotionWatcher(): ReducedMotionWatcher {
 	));
 }
 
-async function loadFonts(): Promise<void> {
+/**
+ * Loads the box-drawing glyph subset before the first frame draws. A failed
+ * webfont fetch must not block the canvas from rendering (R5) — it just
+ * falls back to the font stack's next entry (`ui-monospace`, `Menlo`, ...),
+ * which every engine's font string already declares.
+ */
+export async function loadFonts(): Promise<void> {
 	if (typeof document === 'undefined' || !document.fonts) return;
-	await document.fonts.load('400 12px "JetBrains Mono"', CANVAS_GLYPHS);
+	try {
+		await document.fonts.load('400 12px "JetBrains Mono"', CANVAS_GLYPHS);
+	} catch {
+		// Draw anyway with the fallback font — see doc comment above.
+	}
+}
+
+/**
+ * Re-fires `onChange` when `devicePixelRatio` crosses a value (R5). A plain
+ * `ResizeObserver` does not fire when only the device pixel ratio changes
+ * without a CSS-pixel size change (e.g. dragging a window between displays
+ * with different pixel densities), which would leave a canvas's backing
+ * store at the wrong resolution until some unrelated resize happened to fire.
+ */
+export function watchDevicePixelRatio(onChange: () => void): () => void {
+	if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
+		return () => {};
+	}
+	let unsubscribeCurrent: () => void = () => {};
+	const subscribe = () => {
+		const dpr = window.devicePixelRatio || 1;
+		const mql = window.matchMedia(`(resolution: ${dpr}dppx)`);
+		const handler = () => {
+			unsubscribeCurrent(); // detach this now-crossed query before attaching the next one
+			onChange();
+			subscribe(); // re-subscribe at the new DPR so the next crossing still fires
+		};
+		mql.addEventListener('change', handler);
+		unsubscribeCurrent = () => mql.removeEventListener('change', handler);
+	};
+	subscribe();
+	return () => unsubscribeCurrent();
 }
 
 function createRafCoalescedResizeObserver(onResize: () => void) {
 	let frame: number | null = null;
-	const observer = new ResizeObserver(() => {
+	const scheduleResize = () => {
 		if (frame !== null) return;
 		frame = requestAnimationFrame(() => {
 			frame = null;
 			onResize();
 		});
-	});
+	};
+	const observer = new ResizeObserver(scheduleResize);
+	const unwatchDpr = watchDevicePixelRatio(scheduleResize);
 	return {
 		observe: (node: HTMLCanvasElement) => observer.observe(node),
 		disconnect: () => {
 			observer.disconnect();
+			unwatchDpr();
 			if (frame !== null) cancelAnimationFrame(frame);
 		}
 	};
