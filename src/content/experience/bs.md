@@ -10,8 +10,10 @@ lane:
   short: 'b.s. ×2 · uniandes'
   color: green
 events:
+  - at: '2019-08'
+    text: 'Started two B.S. degrees at Universidad de los Andes — electronics and systems engineering'
   - at: '2025-10'
-    text: 'Graduated with two B.S. degrees, GPA 4.16/5.0'
+    text: 'Graduated from Universidad de los Andes — two B.S. degrees, GPA 4.16 / 5.0'
 ---
 
 Two degrees at once: modeling and optimization, communication and technology

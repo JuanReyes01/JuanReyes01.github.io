@@ -1,5 +1,6 @@
 ---
 diagram:
+  name: 'feeder-rfid'
   caption: 'how a visit becomes a result'
   label: 'Pipeline: a feeder visit by a PIT-tagged hummingbird or bat is read by an RFID logger (ESP32 or Feather M0), processed by a tested Polars core with parity against 5.4 million legacy rows, shown in a bilingual Streamlit app with offline launchers, and used by field biologists.'
   art: |
