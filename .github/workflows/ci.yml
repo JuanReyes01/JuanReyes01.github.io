@@ -54,3 +54,41 @@ jobs:
 
       - name: Verify build output
         run: bun run verify-build
+
+      - name: Upload Pages artifact
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: build
+
+  deploy:
+    needs: check
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    steps:
+      # Merging this workflow does not switch the live site by itself, but a
+      # push to main right after merge would otherwise try to deploy through
+      # Actions while Pages is still on the legacy build_type. Fail fast
+      # instead of silently no-op-ing or corrupting the legacy build.
+      - name: Guard against a non-workflow Pages source
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          build_type="$(gh api "repos/${{ github.repository }}/pages" --jq .build_type)"
+          if [ "$build_type" != "workflow" ]; then
+            echo "::error::Pages build_type is '$build_type', expected 'workflow'. Refusing to deploy — switch the Pages source to a GitHub Actions workflow first."
+            exit 1
+          fi
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5

@@ -36,3 +36,29 @@ bun run verify-build  # asserts CNAME/.nojekyll/404.html/feeds and zero-JS route
 ## Deploy
 
 GitHub Pages currently serves `main` from the repository root (legacy build). `CNAME` pins the custom domain `jreyes.dev`; DNS lives in Cloudflare. Cutover to the SvelteKit build happens once CI is green end-to-end and the Pages source switches to a GitHub Actions workflow.
+
+The `deploy` job in `.github/workflows/ci.yml` runs on every push to `main` after `check` passes, but it refuses to run unless the Pages source is already set to `workflow` — merging this file does not change what jreyes.dev serves.
+
+### Switch to the Actions build
+
+```sh
+gh api -X PUT repos/JuanReyes01/JuanReyes01.github.io/pages \
+  -f build_type=workflow \
+  -f "source[branch]=main" \
+  -f "source[path]=/" \
+  -f cname=jreyes.dev \
+  -F https_enforced=true
+```
+
+### Roll back to the legacy build
+
+```sh
+gh api -X PUT repos/JuanReyes01/JuanReyes01.github.io/pages \
+  -f build_type=legacy \
+  -f "source[branch]=legacy-site" \
+  -f "source[path]=/" \
+  -f cname=jreyes.dev \
+  -F https_enforced=true
+```
+
+The `legacy-site` branch is a snapshot of `main` taken before the SvelteKit migration started (root `index.html`, `CNAME`, `.nojekyll`, `favicon.svg`).
