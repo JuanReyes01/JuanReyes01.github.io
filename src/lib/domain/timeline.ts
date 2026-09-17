@@ -1,3 +1,4 @@
+import { formatMonth } from './month';
 import type { Lane, Month, Timeline, TimelineDatedEvent, TimelineInput } from './types';
 
 /**
@@ -7,6 +8,15 @@ import type { Lane, Month, Timeline, TimelineDatedEvent, TimelineInput } from '.
  * one markdown file (spec "Derived timeline").
  */
 export function deriveTimeline(entries: TimelineInput[], today: Month): Timeline {
+	for (const entry of entries) {
+		const end = entry.end === 'present' ? Infinity : entry.end;
+		if (entry.start > end) {
+			throw new Error(
+				`invalid timeline entry "${entry.id}": start (${formatMonth(entry.start)}) is after end (${formatMonth(entry.end as Month)})`
+			);
+		}
+	}
+
 	const sorted = [...entries].sort((a, b) => a.start - b.start);
 	const epoch = sorted.length ? sorted[0].start : today;
 

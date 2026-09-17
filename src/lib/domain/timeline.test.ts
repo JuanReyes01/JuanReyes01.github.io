@@ -92,4 +92,32 @@ describe('deriveTimeline', () => {
 			text: 'Promoted to Chief AI Officer — Creceré'
 		});
 	});
+
+	it('throws a clear error when an entry has start after end', () => {
+		const invalid: TimelineInput[] = [
+			{
+				id: 'broken',
+				start: m('2025-01'),
+				end: m('2024-01'),
+				lane: { label: 'Broken', short: 'broken', color: 'green' },
+				events: [{ at: m('2025-01'), text: 'Should never derive' }]
+			}
+		];
+		expect(() => deriveTimeline(invalid, m('2026-09'))).toThrow(
+			/broken.*start.*2025-01.*end.*2024-01/i
+		);
+	});
+
+	it('allows an entry whose start equals its end (a single-month role)', () => {
+		const oneMonth: TimelineInput[] = [
+			{
+				id: 'brief',
+				start: m('2025-01'),
+				end: m('2025-01'),
+				lane: { label: 'Brief', short: 'brief', color: 'green' },
+				events: [{ at: m('2025-01'), text: 'One month only' }]
+			}
+		];
+		expect(() => deriveTimeline(oneMonth, m('2026-09'))).not.toThrow();
+	});
 });
