@@ -6,15 +6,18 @@
  * so the interaction logic is unit-testable without a real canvas action;
  * `sky` is the production action, resolving real browser deps lazily
  * inside the function body so nothing touches the DOM during SSR.
+ *
+ * `textEl`/`spaceEl` used to also feed the hero hummingbird's DOM-relative
+ * layout math; now that the bird lives on `/field/` (design #4938 slice S2),
+ * this action only needs a `host` to attach the ripple's pointer/touch
+ * listeners to.
  */
 import { createCanvasAction, type CanvasActionDeps } from '../runtime/canvas-action';
 import { browserCanvasActionDeps } from '../runtime/browser';
-import { SkyEngine, type MeasurableElement } from '../engines/sky';
+import { SkyEngine } from '../engines/sky';
 
 export interface SkyActionParams {
 	host: HTMLElement;
-	textEl: HTMLElement;
-	spaceEl?: MeasurableElement | null;
 }
 
 export function createSkyAction(
@@ -25,39 +28,23 @@ export function createSkyAction(
 ) => { update(params: SkyActionParams): void; destroy(): void } {
 	return (node, initialParams) => {
 		// F1 (sveltekit-migration apply-fix batch): in Svelte 5, this action's
-		// `host`/`textEl`/`spaceEl` params can still be `undefined` on the
-		// canvas's first synchronous mount (the parent's `bind:this` for
-		// `.hero`/`.hero-text`/`.hero-space` hasn't resolved yet at that exact
-		// instant) — using them straight away threw inside `SkyEngine` and
-		// left the hero canvas permanently unpainted. `node` (the canvas
-		// itself) IS already attached to the document by the time an action
-		// runs, so walking up to its nearest `.hero` ancestor (and down to its
-		// known children) is a deterministic fallback that doesn't depend on
-		// sibling `bind:this` timing at all.
+		// `host` param can still be `undefined` on the canvas's first
+		// synchronous mount (the parent's `bind:this` for `.hero` hasn't
+		// resolved yet at that exact instant) — `node` (the canvas itself) IS
+		// already attached to the document by the time an action runs, so
+		// walking up to its nearest `.hero` ancestor is a deterministic
+		// fallback that doesn't depend on sibling `bind:this` timing at all.
 		const resolveParams = (params: SkyActionParams): SkyActionParams => {
 			const host = params.host ?? (node.closest('.hero') as HTMLElement | null) ?? undefined;
-			const textEl =
-				params.textEl ?? (host?.querySelector('.hero-text') as HTMLElement | null) ?? undefined;
-			const spaceEl =
-				params.spaceEl !== undefined
-					? params.spaceEl
-					: ((host?.querySelector('.hero-space') as HTMLElement | null) ?? undefined);
-			return { host: host as HTMLElement, textEl: textEl as HTMLElement, spaceEl };
+			return { host: host as HTMLElement };
 		};
 
 		// `create()` resolves asynchronously (fonts load first), so capture
 		// the live engine instance here — poke() calls before it's ready are
 		// simply dropped (SkyEngine.poke also no-ops until resize() has run).
 		let engine: SkyEngine | null = null;
-		const attach = createCanvasAction(deps, (canvas, actionParams: SkyActionParams, env) => {
-			engine = new SkyEngine({
-				canvas,
-				host: actionParams.host,
-				textEl: actionParams.textEl,
-				spaceEl: actionParams.spaceEl,
-				tokens: env.tokens,
-				reduced: env.reduced
-			});
+		const attach = createCanvasAction(deps, (canvas, _actionParams: SkyActionParams, env) => {
+			engine = new SkyEngine({ canvas, tokens: env.tokens, reduced: env.reduced });
 			return engine;
 		});
 		let resolvedParams = resolveParams(initialParams);

@@ -1,15 +1,20 @@
 /**
- * The hero canvas engine (design D14/D15, motion table "Sky /"): ambient
- * cloud drift + a pointer/touch ripple wave + the calm hummingbird, all in
- * one character grid — ported from the legacy `Sky` class. Runs as an
- * ambient loop for as long as it's visible (never "settles") unless
- * reduced motion is active, in which case it renders the legacy's fixed
- * `t=11.3` frame with no ripple, matching the spec's static-frame rule.
+ * The hero character field (design D14/D15, motion table "Sky /"): ambient
+ * cloud drift + a pointer/touch ripple wave, in one monospace character
+ * grid — ported from the legacy `Sky` class. Runs as an ambient loop for as
+ * long as it's visible (never "settles") unless reduced motion is active, in
+ * which case it renders the legacy's fixed `t=11.3` frame with no ripple,
+ * matching the spec's static-frame rule.
+ *
+ * The hummingbird that used to live here moved to `/field/` (design #4938
+ * slice S2 — the hummingbird research happens there, not on the home page),
+ * where it's drawn directly into `BandEngine`'s own grid (`engines/band.ts`).
+ * This engine keeps the cloud field only, which is exactly the "character
+ * field" the home hero header now uses full-width behind its text.
  */
 import { sampleTexture, makeTexture } from '../fields/noise';
 import { cloudField } from '../fields/clouds';
 import { pokeRipple, stepRipple } from '../fields/ripple';
-import { birdGeometryScale, computeBirdMotion, sampleBird, type BirdFrame } from '../fields/bird';
 import { ditherOffset4x4 } from '../fields/dither';
 import { clamp01 } from '../fields/math';
 import { resolveSkyColor } from './sky-palette';
@@ -21,28 +26,8 @@ const RAMP_LAST_INDEX = RAMP.length - 1;
 /** The legacy engine's fixed reduced-motion pose ("Static frame (t=11.3)"). */
 const REDUCED_SEED_T = 11.3;
 
-export interface MeasurableRect {
-	top: number;
-	left: number;
-	width: number;
-	height: number;
-}
-
-export interface MeasurableElement {
-	getBoundingClientRect(): MeasurableRect;
-}
-
 export interface SkyEngineOptions {
 	canvas: HTMLCanvasElement;
-	// F1 (sveltekit-migration apply-fix batch): the action layer resolves
-	// these from either `bind:this` params or a `.hero` DOM-ancestor
-	// fallback and normally always supplies them, but a caller could still
-	// pass neither (e.g. a genuinely host-less canvas) — `layoutBird()`
-	// bails out rather than throwing, the same defensive pattern `resize()`
-	// already uses for a zero-width `rect`.
-	host?: MeasurableElement;
-	textEl?: MeasurableElement;
-	spaceEl?: MeasurableElement | null;
 	tokens: Tokens;
 	reduced: boolean;
 }
@@ -55,9 +40,6 @@ function devicePixelRatioCapped(): number {
 export class SkyEngine implements Engine {
 	private readonly canvas: HTMLCanvasElement;
 	private readonly ctx: CanvasRenderingContext2D;
-	private readonly host?: MeasurableElement;
-	private readonly textEl?: MeasurableElement;
-	private readonly spaceEl?: MeasurableElement | null;
 	private tokens: Tokens;
 	private reduced: boolean;
 
@@ -72,15 +54,11 @@ export class SkyEngine implements Engine {
 	private rows = 0;
 	private fontSize = 12;
 
-	private bird = { S: 150, ax: 0, ay: 0 };
 	private ripple: { current: Float32Array; previous: Float32Array } | null = null;
 
 	constructor(opts: SkyEngineOptions) {
 		this.canvas = opts.canvas;
 		this.ctx = this.canvas.getContext('2d') as CanvasRenderingContext2D;
-		this.host = opts.host;
-		this.textEl = opts.textEl;
-		this.spaceEl = opts.spaceEl;
 		this.tokens = opts.tokens;
 		this.reduced = opts.reduced;
 	}
@@ -136,36 +114,6 @@ export class SkyEngine implements Engine {
 			this.rows = rows;
 			this.ripple = this.reduced ? null : this.freshRippleBuffers();
 		}
-
-		this.layoutBird();
-	}
-
-	private layoutBird(): void {
-		if (!this.host) return;
-		const hostRect = this.host.getBoundingClientRect();
-		const spaceRect = this.spaceEl?.getBoundingClientRect() ?? null;
-		// A visible "space" element (nonzero height) means the narrow, stacked
-		// hero layout is active — simpler than the legacy's computed-style
-		// check, and equivalent in practice (a hidden element has no box).
-		const narrow = !!spaceRect && spaceRect.height > 0;
-
-		let scale: number;
-		let ax: number;
-		let ay: number;
-		if (narrow && spaceRect) {
-			const top = spaceRect.top - hostRect.top;
-			scale = Math.min((spaceRect.height - 16) / 1.75, (this.width - 24) / 2.15);
-			ax = this.width - 12 - 0.8 * scale;
-			ay = top + 8 + 0.8 * scale;
-		} else {
-			if (!this.textEl) return;
-			const textRect = this.textEl.getBoundingClientRect();
-			const textRight = textRect.left + textRect.width - hostRect.left;
-			scale = Math.min(this.height / 1.85, (this.width - 72 - textRight) / 2.12);
-			ax = this.width - 20 - 0.8 * scale;
-			ay = this.height / 2 - 0.095 * scale;
-		}
-		this.bird = { S: Math.max(scale, 60), ax, ay };
 	}
 
 	/** Adds ripple energy at a pointer/touch position, in canvas-local client coordinates. */
@@ -190,11 +138,6 @@ export class SkyEngine implements Engine {
 			this.ripple = { current: next, previous: prev };
 		}
 
-		const frame: BirdFrame = {
-			...computeBirdMotion(t, this.reduced),
-			...birdGeometryScale(this.ch, this.cw, this.bird.S)
-		};
-		const shimmer = Math.floor(t * 1.5);
 		const unitX = this.cw / 3;
 		const unitY = this.ch / 3;
 		const heightUnits = this.height / 3;
@@ -209,53 +152,41 @@ export class SkyEngine implements Engine {
 			// buffers — instead of one fillStyle+fillText call per cell. Draw
 			// calls end up bounded by rows x distinct colors, not cell count.
 			const rowBatches = new Map<string, string[]>();
-			const birdY = ((y + 0.5) * this.ch - this.bird.ay) / this.bird.S;
 			for (let x = 0; x < this.cols; x++) {
-				const birdX = ((x + 0.5) * this.cw - this.bird.ax) / this.bird.S;
-				const bird = sampleBird(birdX, birdY, frame);
-
-				let glyph: string;
 				let colorKey: Parameters<typeof resolveSkyColor>[0];
 
-				if (bird) {
-					if (bird.key === 'eye') continue;
-					colorKey = bird.key === 'gorget' && (x + y + shimmer) % 2 === 1 ? 'gorget2' : bird.key;
-					const idx = Math.max(2, Math.round(clamp01(bird.value) * RAMP_LAST_INDEX));
-					glyph = RAMP.charAt(idx);
+				let sx = x;
+				let sy = y;
+				let boost = 0;
+				let energy = 0;
+				if (this.ripple && x > 0 && y > 0 && x < this.cols - 1 && y < this.rows - 1) {
+					const i = y * this.cols + x;
+					const r = this.ripple.current;
+					energy = r[i];
+					sx += (r[i + 1] - r[i - 1]) * 1.5;
+					sy += (r[i + this.cols] - r[i - this.cols]) * 1.5;
+					boost = Math.min(1, Math.abs(energy) * 0.28);
+				}
+				const X = sx * unitX;
+				const Y = sy * unitY;
+				let value = cloudField(
+					(px, py) => sampleTexture(this.textureA, px, py),
+					(px, py) => sampleTexture(this.textureB, px, py),
+					X,
+					Y,
+					t,
+					heightUnits
+				);
+				value = clamp01(value + boost + ditherOffset4x4(x, y) * 0.09);
+				const idx = Math.round(value * RAMP_LAST_INDEX);
+				if (idx === 0) continue;
+				const glyph = RAMP.charAt(idx);
+				if (boost > 0.35) {
+					colorKey = energy > 0 ? 'hotP' : 'hotC';
 				} else {
-					let sx = x;
-					let sy = y;
-					let boost = 0;
-					let energy = 0;
-					if (this.ripple && x > 0 && y > 0 && x < this.cols - 1 && y < this.rows - 1) {
-						const i = y * this.cols + x;
-						const r = this.ripple.current;
-						energy = r[i];
-						sx += (r[i + 1] - r[i - 1]) * 1.5;
-						sy += (r[i + this.cols] - r[i - this.cols]) * 1.5;
-						boost = Math.min(1, Math.abs(energy) * 0.28);
-					}
-					const X = sx * unitX;
-					const Y = sy * unitY;
-					let value = cloudField(
-						(px, py) => sampleTexture(this.textureA, px, py),
-						(px, py) => sampleTexture(this.textureB, px, py),
-						X,
-						Y,
-						t,
-						heightUnits
-					);
-					value = clamp01(value + boost + ditherOffset4x4(x, y) * 0.09);
-					const idx = Math.round(value * RAMP_LAST_INDEX);
-					if (idx === 0) continue;
-					glyph = RAMP.charAt(idx);
-					if (boost > 0.35) {
-						colorKey = energy > 0 ? 'hotP' : 'hotC';
-					} else {
-						const hueSample = sampleTexture(this.textureB, X * 0.35 + t * 1.2, Y * 0.35 + 40);
-						const hue = hueSample < 0.47 ? 'c' : hueSample < 0.56 ? 'b' : 'm';
-						colorKey = `${hue}${value > 0.42 ? '1' : '0'}` as Parameters<typeof resolveSkyColor>[0];
-					}
+					const hueSample = sampleTexture(this.textureB, X * 0.35 + t * 1.2, Y * 0.35 + 40);
+					const hue = hueSample < 0.47 ? 'c' : hueSample < 0.56 ? 'b' : 'm';
+					colorKey = `${hue}${value > 0.42 ? '1' : '0'}` as Parameters<typeof resolveSkyColor>[0];
 				}
 
 				let batch = rowBatches.get(colorKey);

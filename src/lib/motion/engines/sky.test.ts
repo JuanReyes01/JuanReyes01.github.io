@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { SkyEngine, type MeasurableElement } from './sky';
+import { SkyEngine } from './sky';
 import type { Engine } from '../runtime/canvas-action';
 import type { Tokens } from '../runtime/tokens';
 
@@ -18,7 +18,9 @@ const TOKENS: Tokens = {
 	pink: '#f25477'
 };
 
-function rect(overrides: Partial<ReturnType<MeasurableElement['getBoundingClientRect']>> = {}) {
+function rect(
+	overrides: Partial<{ top: number; left: number; width: number; height: number }> = {}
+) {
 	return { top: 0, left: 0, width: 0, height: 0, ...overrides };
 }
 
@@ -50,13 +52,7 @@ function fakeCanvas(width = 600, height = 300) {
 
 function makeEngine(reduced: boolean, width = 600, height = 300) {
 	const { canvas, fillTextCallCount } = fakeCanvas(width, height);
-	const host: MeasurableElement = {
-		getBoundingClientRect: () => rect({ width, height })
-	};
-	const textEl: MeasurableElement = {
-		getBoundingClientRect: () => rect({ left: 20, width: 200 })
-	};
-	const engine = new SkyEngine({ canvas, host, textEl, spaceEl: null, tokens: TOKENS, reduced });
+	const engine = new SkyEngine({ canvas, tokens: TOKENS, reduced });
 	engine.resize();
 	return { engine, fillTextCallCount };
 }
@@ -113,16 +109,12 @@ describe('SkyEngine', () => {
 		expect(() => engine.draw(16)).not.toThrow();
 	});
 
-	it('resize()/draw() do not throw when host/textEl are missing (F1 fix — pathological caller input)', () => {
-		const { canvas } = fakeCanvas();
-		const engine = new SkyEngine({
-			canvas,
-			host: undefined as unknown as MeasurableElement,
-			textEl: undefined as unknown as MeasurableElement,
-			spaceEl: null,
-			tokens: TOKENS,
-			reduced: false
-		});
+	// design #4938 slice S2: the hummingbird (and its host/textEl-dependent
+	// layout math) moved to `/field/` — this engine is cloud+ripple only now,
+	// so resize()/draw() no longer take or need any DOM-measurement params.
+	it('resize()/draw() do not throw for a zero-width rect (still guards a genuinely unlaid-out canvas)', () => {
+		const { canvas } = fakeCanvas(0, 0);
+		const engine = new SkyEngine({ canvas, tokens: TOKENS, reduced: false });
 		expect(() => engine.resize()).not.toThrow();
 		expect(() => engine.draw(0)).not.toThrow();
 	});

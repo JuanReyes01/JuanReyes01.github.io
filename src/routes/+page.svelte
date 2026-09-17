@@ -13,8 +13,6 @@
 	let { data }: { data: PageData } = $props();
 
 	let heroEl: HTMLDivElement | undefined = $state();
-	let heroTextEl: HTMLDivElement | undefined = $state();
-	let heroSpaceEl: HTMLDivElement | undefined = $state();
 
 	// Built here (not inline in the markup), with both HTML tag-name literals
 	// split mid-word — see Row.svelte's original comment for why this exact
@@ -49,7 +47,7 @@
 	{/snippet}
 
 	<div class="hero" bind:this={heroEl}>
-		<div class="hero-text" bind:this={heroTextEl}>
+		<div class="hero-text">
 			<p class="prompt"><b>juan@laptop</b>:~$ whoami</p>
 			<h2 id="hello">Hello, I'm Juan<span class="cursor" aria-hidden="true">_</span></h2>
 			<!-- eslint-disable-next-line svelte/no-at-html-tags -- server-rendered from src/content/pages/home.md via the validated markdown pipeline, not user input -->
@@ -69,10 +67,9 @@
 			</ul>
 		</div>
 		<div class="hero-veil" aria-hidden="true"></div>
-		<div class="hero-space" bind:this={heroSpaceEl} aria-hidden="true"></div>
+		<div class="hero-space" aria-hidden="true"></div>
 		<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- not a link -->
-		<canvas aria-hidden="true" use:sky={{ host: heroEl, textEl: heroTextEl, spaceEl: heroSpaceEl }}
-		></canvas>
+		<canvas aria-hidden="true" use:sky={{ host: heroEl }}></canvas>
 	</div>
 
 	<div class="index">
@@ -160,6 +157,9 @@
 		max-width: 27rem;
 		padding: 34px 28px;
 	}
+	/* design #4938 slice S2: no longer sized for the hummingbird (moved to
+	   /field/) — just reserves room below the hero text on narrow viewports
+	   so the character field is still visible there, not only on desktop. */
 	.hero-space {
 		display: none;
 		position: relative;
