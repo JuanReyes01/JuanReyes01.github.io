@@ -11,7 +11,7 @@ lane:
   color: blue
 events:
   - at: '2024-06'
-    text: 'Research Intern — Cornell University'
+    text: 'Research intern at Cornell — preference alignment, StyleGAN2'
 ---
 
 - Human-preference alignment and controlled generation.

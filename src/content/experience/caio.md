@@ -12,7 +12,7 @@ lane:
   color: pink
 events:
   - at: '2026-02'
-    text: 'Promoted to Chief AI Officer — Creceré'
+    text: 'Promoted to Chief AI Officer — CreditBay'
 ---
 
 - Led AI strategy and the engineering team, taking the company from MVP to a

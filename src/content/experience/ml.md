@@ -11,7 +11,7 @@ lane:
   color: yellow
 events:
   - at: '2025-05'
-    text: 'Machine Learning Engineer — Creceré'
+    text: 'Joined Creceré as ML engineer — voice agents on ElevenLabs'
 ---
 
 - Built multi-agent voice workflows on ElevenLabs that negotiate payment
