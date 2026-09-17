@@ -11,23 +11,16 @@ export default defineConfig({
 					filename.split(/[/\\]/).includes('node_modules') ? undefined : true
 			},
 			adapter: adapter(),
-			prerender: {
-				handleHttpError: ({ path, message }) => {
-					// TabBar (design-system shell, PR2) links to every section up
-					// front; /experience/ and /field/ don't exist as routes yet — they
-					// land in the next Phase 5 slice, stacked on top of this one
-					// (/work/ and /work/[slug]/ already exist as of this PR).
-					// Downgrade only those known, temporary 404s to a warning so the
-					// prerender crawler doesn't fail the build; any other broken
-					// link still fails it.
-					const pendingRoutes = ['/experience/', '/field/'];
-					if (pendingRoutes.includes(path)) {
-						console.warn(`(pending route, lands in Phase 5) ${message}`);
-						return;
-					}
-					throw new Error(message);
-				}
+			paths: {
+				// Absolute asset URLs (design D7): `build/404.html` is served by
+				// GitHub Pages for any unmatched path, at any depth, so its asset
+				// references can't stay relative to `/404`'s own shallow route depth.
+				relative: false
 			}
+			// Every route from the design's table exists as of this PR — the
+			// temporary `handleHttpError` allow-list for /experience/, /work/ and
+			// /field/ (Phase 2-4) is gone. Any broken link now fails the build,
+			// which is the default `prerender.handleHttpError` behavior.
 		})
 	],
 	test: {
@@ -38,7 +31,7 @@ export default defineConfig({
 				test: {
 					name: 'server',
 					environment: 'node',
-					include: ['src/**/*.{test,spec}.{js,ts}'],
+					include: ['src/**/*.{test,spec}.{js,ts}', 'scripts/**/*.{test,spec}.{js,ts}'],
 					exclude: ['src/**/*.svelte.{test,spec}.{js,ts}']
 				}
 			}
