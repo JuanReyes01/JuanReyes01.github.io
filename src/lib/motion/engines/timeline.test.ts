@@ -151,4 +151,11 @@ describe('TimelineEngine', () => {
 		engine.draw(1);
 		expect(engine.isSettled()).toBe(true);
 	});
+
+	it('monthAtClientX converts a pointer position to a clamped month', () => {
+		const { engine } = makeEngine({ reduced: true });
+		expect(engine.monthAtClientX(130)).toBe(0); // near the left edge of the grid body
+		expect(engine.monthAtClientX(-9999)).toBe(0); // clamps below the start
+		expect(engine.monthAtClientX(9999)).toBe(10); // clamps past HEAD
+	});
 });
