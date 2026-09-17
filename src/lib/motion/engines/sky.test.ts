@@ -57,6 +57,31 @@ function makeEngine(reduced: boolean, width = 600, height = 300) {
 	return { engine, fillTextCallCount };
 }
 
+/** Like {@link fakeCanvas}, but also captures every string drawn so a test
+ * can inspect which glyphs actually got painted (owner decision #4938 item
+ * 6: directional edge glyphs, not just the flat density ramp). */
+function fakeCanvasCapturingText(width = 600, height = 300) {
+	const drawn: string[] = [];
+	const ctx = {
+		fillStyle: '',
+		font: '',
+		textBaseline: '',
+		setTransform: () => {},
+		clearRect: () => {},
+		fillText: (text: string) => {
+			drawn.push(text);
+		},
+		measureText: () => ({ width: 7 })
+	};
+	const canvas = {
+		width: 0,
+		height: 0,
+		getContext: () => ctx,
+		getBoundingClientRect: () => rect({ width, height })
+	};
+	return { canvas: canvas as unknown as HTMLCanvasElement, drawn };
+}
+
 describe('SkyEngine', () => {
 	it('never settles while ambient (visible, not reduced)', () => {
 		const { engine } = makeEngine(false);
@@ -117,5 +142,39 @@ describe('SkyEngine', () => {
 		const engine = new SkyEngine({ canvas, tokens: TOKENS, reduced: false });
 		expect(() => engine.resize()).not.toThrow();
 		expect(() => engine.draw(0)).not.toThrow();
+	});
+
+	// design #4938 item 6: "the theme is ASCII ART, but super advanced" —
+	// the cloud field must trace its shapes with directional edge glyphs
+	// (`- | / \`), not just a flat brightness -> density ramp, while flat
+	// interiors keep the density ramp (no noisy edge glyphs everywhere).
+	it('paints directional edge glyphs at cloud boundaries, not just density-ramp characters', () => {
+		const { canvas, drawn } = fakeCanvasCapturingText(1200, 400);
+		const engine = new SkyEngine({ canvas, tokens: TOKENS, reduced: false });
+		engine.resize();
+		engine.draw(0);
+		const allChars = drawn.join('');
+		// `|`, `/`, `\` are NOT part of the legacy density ramp (` .·:-=+*#%@`
+		// already contains `-`), so finding any of them proves real
+		// directional-glyph selection kicked in, not just a density lookup.
+		const edgeGlyphs = [...allChars].filter((c) => '|/\\'.includes(c));
+		expect(edgeGlyphs.length).toBeGreaterThan(0);
+		// Interiors must still fall back to the density ramp somewhere — the
+		// upgrade traces edges, it doesn't turn the whole field into edges.
+		const densityGlyphs = [...allChars].filter((c) => '.·:=+*#%@'.includes(c));
+		expect(densityGlyphs.length).toBeGreaterThan(0);
+	});
+
+	it('keeps the reduced-motion static frame deterministic with the new glyph selection', () => {
+		const { canvas, drawn } = fakeCanvasCapturingText(1200, 400);
+		const engine = new SkyEngine({ canvas, tokens: TOKENS, reduced: true });
+		engine.resize();
+		engine.draw(0);
+		const first = drawn.join('|');
+		const { canvas: canvas2, drawn: drawn2 } = fakeCanvasCapturingText(1200, 400);
+		const engine2 = new SkyEngine({ canvas: canvas2, tokens: TOKENS, reduced: true });
+		engine2.resize();
+		engine2.draw(50000);
+		expect(drawn2.join('|')).toBe(first);
 	});
 });

@@ -19,6 +19,7 @@ import { makeTexture, sampleTexture } from '../fields/noise';
 import { iridescentField } from '../fields/iridescence';
 import { passesDither } from '../fields/dither';
 import { blendOverRgba } from '../fields/math';
+import { sampleGradient } from '../fields/glyphs';
 import { birdGeometryScale, computeBirdMotion, sampleBird, type BirdFrame } from '../fields/bird';
 import { resolveSkyColor, type SkyColorKey } from './sky-palette';
 import { hexToRgb, parseCssColor, type Tokens } from '../runtime/tokens';
@@ -41,6 +42,23 @@ export function computeBirdAnchor(
 	const S = rows * 0.45;
 	return { S, ax: cols * 0.62, ay: rows * 0.473 };
 }
+
+/**
+ * Minimum cell-space gradient magnitude of the bird's own ramp-value field
+ * (0 outside the bird, the part's ramp value inside — see `draw()`'s
+ * `birdField`) to treat a cell as sitting right on the bird's silhouette
+ * boundary (owner decision #4938 item 6: "the theme is ASCII ART, but super
+ * advanced" — shapes should read as drawn, not a blob). The band is a raw
+ * pixel/dither raster (one canvas pixel per dither cell — see the file doc
+ * above), too fine-grained for legible text glyphs, so here the same
+ * gradient technique the directional-glyph engine uses
+ * (`fields/glyphs.ts#sampleGradient`) forces the boundary fully opaque — a
+ * crisp outline stroke — instead of literal glyph characters. Tuned against
+ * a real bird frame (see `band.test.ts`): comfortably above the internal
+ * ramp gradients inside a single soft-edged part, comfortably below would
+ * turn the whole translucent wing solid.
+ */
+const BIRD_EDGE_THRESHOLD = 0.3;
 
 /** Below this viewport width the dither cell shrinks from 3px to 2px (design motion table). */
 const NARROW_BREAKPOINT_PX = 760;
@@ -131,6 +149,17 @@ export class BandEngine implements Engine {
 		};
 		const shimmer = Math.floor(t * 1.5);
 
+		// The bird's own ramp-value field in cell space (0 outside the bird
+		// entirely — including over its own `eye` hole — the part's ramp
+		// value inside), reused for edge detection below via the exact same
+		// gradient math the directional-glyph engine uses.
+		const birdField = (cx: number, cy: number): number => {
+			const bx = (cx + 0.5 - this.bird.ax) / this.bird.S;
+			const by = (cy + 0.5 - this.bird.ay) / this.bird.S;
+			const sample = sampleBird(bx, by, frame);
+			return sample && sample.key !== 'eye' ? sample.value : 0;
+		};
+
 		for (let y = 0; y < this.rows; y++) {
 			const scanline = y % 2 === 1 ? SCANLINE_DIM : 1;
 			const birdY = (y + 0.5 - this.bird.ay) / this.bird.S;
@@ -155,6 +184,14 @@ export class BandEngine implements Engine {
 				const colorKey: SkyColorKey =
 					bird.key === 'gorget' && (x + y + shimmer) % 2 === 1 ? 'gorget2' : bird.key;
 				const top = parseCssColor(resolveSkyColor(colorKey, this.tokens));
+				// Owner decision #4938 item 6: right at the bird's own
+				// silhouette boundary, force full opacity — a crisp outline
+				// stroke — instead of letting a translucent part (wing,
+				// farwing, ghost) fade into whatever partial alpha the dither
+				// field underneath happened to leave. See `BIRD_EDGE_THRESHOLD`.
+				if (sampleGradient(birdField, x, y).magnitude >= BIRD_EDGE_THRESHOLD) {
+					top.a = 1;
+				}
 				const blended = blendOverRgba(top, {
 					r: data[i],
 					g: data[i + 1],

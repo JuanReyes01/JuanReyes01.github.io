@@ -17,14 +17,24 @@ import { cloudField } from '../fields/clouds';
 import { pokeRipple, stepRipple } from '../fields/ripple';
 import { ditherOffset4x4 } from '../fields/dither';
 import { clamp01 } from '../fields/math';
+import { pickGlyph, DENSITY_RAMP } from '../fields/glyphs';
 import { resolveSkyColor } from './sky-palette';
 import type { Engine } from '../runtime/canvas-action';
 import type { Tokens } from '../runtime/tokens';
 
-const RAMP = ' .·:-=+*#%@';
-const RAMP_LAST_INDEX = RAMP.length - 1;
 /** The legacy engine's fixed reduced-motion pose ("Static frame (t=11.3)"). */
 const REDUCED_SEED_T = 11.3;
+/**
+ * Minimum gradient magnitude (in the cloud field's own 0-1 units, sampled
+ * one grid cell apart) to treat a cell as a real edge instead of a flat
+ * interior (owner decision #4938 item 6: "the theme is ASCII ART, but super
+ * advanced" — trace the clouds' shapes with directional glyphs, keep their
+ * soft interiors on the density ramp). Tuned against real headless-browser
+ * screenshots of the hero at common widths: low enough that cloud silhouette
+ * boundaries clearly pick up `- | / \`, high enough that the field's own
+ * gentle internal shading doesn't turn into edge noise.
+ */
+const EDGE_THRESHOLD = 0.16;
 
 export interface SkyEngineOptions {
 	canvas: HTMLCanvasElement;
@@ -146,6 +156,32 @@ export class SkyEngine implements Engine {
 		ctx.clearRect(0, 0, this.width, this.height);
 		ctx.textBaseline = 'top';
 
+		// The gradient-sampling field for directional-glyph selection (owner
+		// decision #4938 item 6): the ripple's smooth spatial distortion is
+		// included (so a ripple wavefront can itself get outlined), but NOT
+		// the per-cell `ditherOffset4x4` jitter added to `value` below — that
+		// offset tiles every 4 cells and would inject a fake high-frequency
+		// gradient into every flat interior, turning calm cloud fills into
+		// edge noise instead of tracing real shapes.
+		const cellField = (cx: number, cy: number): number => {
+			let fx = cx;
+			let fy = cy;
+			if (this.ripple && cx > 0 && cy > 0 && cx < this.cols - 1 && cy < this.rows - 1) {
+				const i = cy * this.cols + cx;
+				const r = this.ripple.current;
+				fx += (r[i + 1] - r[i - 1]) * 1.5;
+				fy += (r[i + this.cols] - r[i - this.cols]) * 1.5;
+			}
+			return cloudField(
+				(px, py) => sampleTexture(this.textureA, px, py),
+				(px, py) => sampleTexture(this.textureB, px, py),
+				fx * unitX,
+				fy * unitY,
+				t,
+				heightUnits
+			);
+		};
+
 		for (let y = 0; y < this.rows; y++) {
 			// E4 (perf): batch one string per distinct color key for this row —
 			// exactly like the legacy `Sky.prototype.draw`'s `used[key]` row
@@ -178,9 +214,11 @@ export class SkyEngine implements Engine {
 					heightUnits
 				);
 				value = clamp01(value + boost + ditherOffset4x4(x, y) * 0.09);
-				const idx = Math.round(value * RAMP_LAST_INDEX);
-				if (idx === 0) continue;
-				const glyph = RAMP.charAt(idx);
+				const glyph = pickGlyph(cellField, x, y, value, {
+					edgeThreshold: EDGE_THRESHOLD,
+					ramp: DENSITY_RAMP
+				});
+				if (glyph === ' ') continue;
 				if (boost > 0.35) {
 					colorKey = energy > 0 ? 'hotP' : 'hotC';
 				} else {
