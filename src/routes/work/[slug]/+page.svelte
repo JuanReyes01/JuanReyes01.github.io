@@ -116,12 +116,23 @@
 	section li {
 		margin: 6px 0;
 	}
+	/* F7 (sveltekit-migration apply-fix batch): a flex row with `flex-wrap`
+	   let a long caption's `<li>` shrink narrower than its own text (the
+	   default flex-item `min-width` doesn't protect wrapped text the way it
+	   protects `white-space: nowrap` text), so the caption visually ran into
+	   the next metric instead of wrapping within its own column. Grid with
+	   `max-content` columns gives each metric only the width it needs and
+	   never lets one cell's content spill into another. */
 	.results {
-		display: flex;
-		flex-wrap: wrap;
-		gap: 20px;
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(140px, max-content));
+		column-gap: 40px;
+		row-gap: 16px;
 		list-style: none;
 		padding: 0;
+	}
+	.results li {
+		max-width: 22rem;
 	}
 	.back-link {
 		margin-top: 26px;
