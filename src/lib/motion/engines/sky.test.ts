@@ -48,10 +48,10 @@ function fakeCanvas(width = 600, height = 300) {
 	};
 }
 
-function makeEngine(reduced: boolean) {
-	const { canvas, fillTextCallCount } = fakeCanvas();
+function makeEngine(reduced: boolean, width = 600, height = 300) {
+	const { canvas, fillTextCallCount } = fakeCanvas(width, height);
 	const host: MeasurableElement = {
-		getBoundingClientRect: () => rect({ width: 600, height: 300 })
+		getBoundingClientRect: () => rect({ width, height })
 	};
 	const textEl: MeasurableElement = {
 		getBoundingClientRect: () => rect({ left: 20, width: 200 })
@@ -91,6 +91,18 @@ describe('SkyEngine', () => {
 		const { engine } = makeEngine(false);
 		expect(() => (engine as Engine).setVisibility(true, 0.6)).not.toThrow();
 		expect(engine.isSettled()).toBe(false); // unaffected either way
+	});
+
+	it('batches draws per row and color key: fillText calls stay bounded by rows × distinct colors, not cell count (E4)', () => {
+		const { engine, fillTextCallCount } = makeEngine(false, 1200, 400);
+		engine.draw(0);
+		// Legacy Sky.prototype.draw batches one string per row per color key
+		// (one fillStyle + one fillText per batch). A 1200x400 hero has ~170
+		// cols x ~29 rows (~4900 non-space cells) but only a handful of
+		// distinct color keys per row, so a properly batched frame draws far
+		// fewer than 300 times — one fillText per cell would blow well past it.
+		expect(fillTextCallCount()).toBeGreaterThan(0);
+		expect(fillTextCallCount()).toBeLessThan(300);
 	});
 
 	it('poke() and setReduced() do not throw', () => {
