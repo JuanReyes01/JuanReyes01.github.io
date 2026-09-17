@@ -17,7 +17,8 @@
 		"lint": "prettier --check . && eslint .",
 		"format": "prettier --write .",
 		"test:unit": "vitest",
-		"test": "vitest run"
+		"test": "vitest run",
+		"verify-build": "bun scripts/verify-build.ts"
 	},
 	"devDependencies": {
 		"@eslint/js": "^10.0.1",

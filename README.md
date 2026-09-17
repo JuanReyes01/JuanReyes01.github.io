@@ -30,6 +30,7 @@ bun run check     # svelte-check, fails on warnings
 bun run lint      # prettier --check + eslint
 bun run test      # vitest run
 bun run build     # prerender to build/
+bun run verify-build  # asserts CNAME/.nojekyll/404.html/feeds and zero-JS routes in build/
 ```
 
 ## Deploy
