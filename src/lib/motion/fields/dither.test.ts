@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { BAYER_8X8, bayerThreshold, passesDither } from './dither';
+import { BAYER_4X4, BAYER_8X8, bayerThreshold, ditherOffset4x4, passesDither } from './dither';
 
 describe('BAYER_8X8', () => {
 	it('is the legacy 8x8 Bayer matrix, 64 distinct integers from 0 to 63', () => {
@@ -33,6 +33,21 @@ describe('bayerThreshold', () => {
 				expect(v).toBeLessThan(1);
 			}
 		}
+	});
+});
+
+describe('BAYER_4X4', () => {
+	it('is the legacy 4x4 dither table used to texture the hero ramp', () => {
+		expect(BAYER_4X4).toEqual([0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5]);
+	});
+});
+
+describe('ditherOffset4x4', () => {
+	it('maps each cell to `BAYER_4X4[i]/16 - 0.47`, tiled every 4 cells, matching the legacy hero field', () => {
+		expect(ditherOffset4x4(0, 0)).toBeCloseTo(0 / 16 - 0.47);
+		expect(ditherOffset4x4(1, 0)).toBeCloseTo(8 / 16 - 0.47);
+		expect(ditherOffset4x4(4, 0)).toBeCloseTo(ditherOffset4x4(0, 0));
+		expect(ditherOffset4x4(0, 4)).toBeCloseTo(ditherOffset4x4(0, 0));
 	});
 });
 
