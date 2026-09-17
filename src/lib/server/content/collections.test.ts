@@ -86,6 +86,18 @@ describe('loadExperienceFiles', () => {
 			})
 		).toThrow(/promotedFrom/);
 	});
+
+	it('throws when an entry ends before it starts, naming the entry', () => {
+		const backwards = VALID_ML.replace('start: "2025-05"', 'start: "2026-05"');
+		expect(() => loadExperienceFiles({ '/src/content/experience/ml.md': backwards })).toThrow(
+			/ml.*end.*before.*start/is
+		);
+	});
+
+	it('allows an open-ended ("present") entry regardless of how far in the past it starts', () => {
+		const openEnded = VALID_ML.replace('end: "2026-02"', 'end: "present"');
+		expect(() => loadExperienceFiles({ '/src/content/experience/ml.md': openEnded })).not.toThrow();
+	});
 });
 
 describe('loadWorkFiles', () => {
@@ -132,19 +144,27 @@ describe('loadPostFiles', () => {
 });
 
 describe('loadHomePageFiles / loadFieldPageFiles', () => {
-	it('loads the single home page entry', () => {
-		const entry = loadHomePageFiles({
-			'/src/content/pages/home.md': md({
-				now: [{ title: 't', desc: 'd', tags: [] }],
-				how: [{ title: 't', desc: 'd', tags: [] }],
-				highlights: ['creditbay']
-			})
-		});
+	const homeFile = (highlights: string[]) => ({
+		'/src/content/pages/home.md': md({
+			now: [{ title: 't', desc: 'd', tags: [] }],
+			how: [{ title: 't', desc: 'd', tags: [] }],
+			highlights
+		})
+	});
+
+	it('loads the single home page entry when every highlight matches a known work slug', () => {
+		const entry = loadHomePageFiles(homeFile(['creditbay']), ['creditbay', 'amd']);
 		expect(entry.data.highlights).toEqual(['creditbay']);
 	});
 
 	it('throws when the home page file is missing', () => {
-		expect(() => loadHomePageFiles({})).toThrow(/home\.md/);
+		expect(() => loadHomePageFiles({}, ['creditbay'])).toThrow(/home\.md/);
+	});
+
+	it('throws, naming the file, when a highlight references an unknown work slug', () => {
+		expect(() => loadHomePageFiles(homeFile(['ghost-project']), ['creditbay', 'amd'])).toThrow(
+			/home\.md.*ghost-project/is
+		);
 	});
 
 	it('loads the single field page entry', () => {
@@ -176,8 +196,11 @@ describe('production glob wrappers exercise the real content directory', () => {
 		expect(() => postEntries()).not.toThrow();
 	});
 
-	it('the real home page validates', () => {
-		expect(homePage().data.highlights.length).toBeGreaterThan(0);
+	it('the real home page validates and every highlight resolves to a real work slug', () => {
+		const home = homePage();
+		expect(home.data.highlights.length).toBeGreaterThan(0);
+		const workSlugs = new Set(workEntries().map((e) => e.slug));
+		for (const slug of home.data.highlights) expect(workSlugs.has(slug)).toBe(true);
 	});
 
 	it('the real field page validates', () => {

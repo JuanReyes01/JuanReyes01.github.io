@@ -56,6 +56,14 @@ function assertExperienceCrossChecks(entries: ContentEntry<ExperienceFrontmatter
 		(id) => `experience id: ${id}`
 	);
 
+	for (const entry of entries) {
+		if (entry.data.end !== 'present' && entry.data.end < entry.data.start) {
+			throw new Error(
+				`${entry.slug}: end (${entry.data.end}) is before start (${entry.data.start})`
+			);
+		}
+	}
+
 	const byId = new Map(entries.map((e) => [e.data.id, e]));
 	for (const entry of entries) {
 		const parentId = entry.data.promotedFrom;
@@ -77,6 +85,16 @@ function assertWorkCrossChecks(entries: ContentEntry<WorkFrontmatter>[]): void {
 		entries.map((e) => e.data.build),
 		(build) => `work build number: ${build}`
 	);
+}
+
+/** Every `highlights` slug on the home page must resolve to a real work entry (design D3). */
+function assertHomeCrossChecks(home: ContentEntry<HomeFrontmatter>, workSlugs: string[]): void {
+	const known = new Set(workSlugs);
+	for (const slug of home.data.highlights) {
+		if (!known.has(slug)) {
+			throw new Error(`${home.slug}.md: highlights references unknown work slug "${slug}"`);
+		}
+	}
 }
 
 /** Pure loader: parses, validates and cross-checks a raw file map. Testable with fixtures. */
@@ -111,8 +129,13 @@ function loadSingleton<T>(
 	return entries[0];
 }
 
-export function loadHomePageFiles(files: Record<string, string>): ContentEntry<HomeFrontmatter> {
-	return loadSingleton(files, homeFrontmatterSchema, 'src/content/pages/home.md');
+export function loadHomePageFiles(
+	files: Record<string, string>,
+	workSlugs: string[]
+): ContentEntry<HomeFrontmatter> {
+	const home = loadSingleton(files, homeFrontmatterSchema, 'src/content/pages/home.md');
+	assertHomeCrossChecks(home, workSlugs);
+	return home;
 }
 
 export function loadFieldPageFiles(files: Record<string, string>): ContentEntry<FieldFrontmatter> {
@@ -158,7 +181,8 @@ export function homePage(): ContentEntry<HomeFrontmatter> {
 		import: 'default',
 		eager: true
 	}) as Record<string, string>;
-	return loadHomePageFiles(files);
+	const workSlugs = workEntries().map((e) => e.slug);
+	return loadHomePageFiles(files, workSlugs);
 }
 
 export function fieldPage(): ContentEntry<FieldFrontmatter> {
