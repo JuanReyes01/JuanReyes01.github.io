@@ -1,13 +1,19 @@
 import { describe, it, expect } from 'vitest';
-import { LEGACY_ANCHORS, resolveLegacyAnchor, buildLegacyRedirectScript } from './redirects';
+import {
+	LEGACY_ANCHORS,
+	resolveLegacyAnchor,
+	buildLegacyRedirectScript,
+	EXPERIENCE_REDIRECT_TARGET,
+	buildExperienceRedirectScript
+} from './redirects';
 
 describe('resolveLegacyAnchor', () => {
 	it('resolves #field to the field route', () => {
 		expect(resolveLegacyAnchor('#field')).toBe('/field/');
 	});
 
-	it('resolves #timeline to the experience route', () => {
-		expect(resolveLegacyAnchor('#timeline')).toBe('/experience/');
+	it('resolves #timeline straight to /work/, not through the /experience/ redirect stub (v2 direction slice S1: avoid a double hop for old bookmarks)', () => {
+		expect(resolveLegacyAnchor('#timeline')).toBe('/work/');
 	});
 
 	it('resolves #builds to the work route', () => {
@@ -44,5 +50,19 @@ describe('buildLegacyRedirectScript', () => {
 		const location: any = { hash: '#nope', replace: (url: string) => (replaced = url) };
 		new Function('location', script)(location);
 		expect(replaced).toBeNull();
+	});
+});
+
+describe('buildExperienceRedirectScript (v2 direction slice S1: /experience/ merged into /work/)', () => {
+	it('targets /work/', () => {
+		expect(EXPERIENCE_REDIRECT_TARGET).toBe('/work/');
+	});
+
+	it('calls location.replace with the redirect target', () => {
+		const script = buildExperienceRedirectScript();
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		const location: any = { replace: (url: string) => (location.replaced = url) };
+		new Function('location', script)(location);
+		expect(location.replaced).toBe(EXPERIENCE_REDIRECT_TARGET);
 	});
 });

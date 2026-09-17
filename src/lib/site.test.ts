@@ -6,8 +6,8 @@ describe('sectionForPath', () => {
 		expect(sectionForPath('/')).toBe('about');
 	});
 
-	it('maps the experience route to the experience section', () => {
-		expect(sectionForPath('/experience/')).toBe('experience');
+	it('maps the old /experience/ redirect stub to the work section, since that is where it now lands (v2 direction slice S1: merge experience into work)', () => {
+		expect(sectionForPath('/experience/')).toBe('work');
 	});
 
 	it('maps the work route to the work section', () => {
@@ -42,7 +42,11 @@ describe('colorsForSection', () => {
 });
 
 describe('TABS', () => {
-	it('lists exactly the four visible tabs, in order, with no writing tab', () => {
-		expect(TABS.map((tab) => tab.label)).toEqual(['home', 'experience', 'work', 'field']);
+	it('lists exactly the three visible tabs, in order, with no writing tab (v2 direction slice S1: experience merged into work)', () => {
+		expect(TABS.map((tab) => tab.label)).toEqual(['home', 'work', 'field']);
+	});
+
+	it('numbers the tabs 1:home 2:work 3:field', () => {
+		expect(TABS.map((tab) => tab.number)).toEqual([1, 2, 3]);
 	});
 });

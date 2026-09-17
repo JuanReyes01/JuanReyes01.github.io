@@ -57,7 +57,13 @@ export const workFrontmatterSchema = z
 		problem: nonEmptyString,
 		decisions: z.array(nonEmptyString).min(1),
 		results: z.array(metricSchema).min(1),
-		diagram: diagramSchema.optional()
+		diagram: diagramSchema.optional(),
+		/** v2 direction slice S1: the experience id whose career period this
+		    build belongs to, for timeline lane <-> build cross-highlighting on
+		    the merged `/work/` page. Cross-checked against real experience ids
+		    in `collections.ts` — a typo here fails the build, same as
+		    `promotedFrom`. */
+		lane: nonEmptyString.optional()
 	})
 	.strict();
 export type WorkFrontmatter = z.infer<typeof workFrontmatterSchema>;

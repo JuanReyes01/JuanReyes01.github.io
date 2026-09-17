@@ -141,6 +141,14 @@ describe('workFrontmatterSchema', () => {
 			}).success
 		).toBe(false);
 	});
+
+	it('accepts an optional `lane` (v2 direction slice S1: maps a build to the experience id whose career period it belongs to, for timeline cross-highlighting)', () => {
+		expect(workFrontmatterSchema.safeParse({ ...valid, lane: 'caio' }).success).toBe(true);
+	});
+
+	it('accepts an entry with no `lane` (optional field)', () => {
+		expect(workFrontmatterSchema.safeParse(valid).success).toBe(true);
+	});
 });
 
 describe('postFrontmatterSchema', () => {

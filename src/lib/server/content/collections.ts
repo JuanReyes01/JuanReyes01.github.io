@@ -80,11 +80,27 @@ function assertExperienceCrossChecks(entries: ContentEntry<ExperienceFrontmatter
 	}
 }
 
-function assertWorkCrossChecks(entries: ContentEntry<WorkFrontmatter>[]): void {
+/** v2 direction slice S1: every build's optional `lane` must resolve to a
+    real experience id, so the merged `/work/` page's cross-highlighting
+    never points the timeline at a lane that doesn't exist (design D3-style
+    cross-check, same pattern as `promotedFrom`). */
+function assertWorkCrossChecks(
+	entries: ContentEntry<WorkFrontmatter>[],
+	experienceIds: string[]
+): void {
 	assertUnique(
 		entries.map((e) => e.data.build),
 		(build) => `work build number: ${build}`
 	);
+
+	const known = new Set(experienceIds);
+	for (const entry of entries) {
+		if (entry.data.lane && !known.has(entry.data.lane)) {
+			throw new Error(
+				`${entry.slug}.md: lane "${entry.data.lane}" does not match any experience id`
+			);
+		}
+	}
 }
 
 /** Every `highlights` slug on the home page must resolve to a real work entry (design D3). */
@@ -106,9 +122,12 @@ export function loadExperienceFiles(
 	return entries;
 }
 
-export function loadWorkFiles(files: Record<string, string>): ContentEntry<WorkFrontmatter>[] {
+export function loadWorkFiles(
+	files: Record<string, string>,
+	experienceIds: string[] = []
+): ContentEntry<WorkFrontmatter>[] {
 	const entries = loadCollection(files, workFrontmatterSchema);
-	assertWorkCrossChecks(entries);
+	assertWorkCrossChecks(entries, experienceIds);
 	return entries;
 }
 
@@ -163,7 +182,8 @@ export function workEntries(): ContentEntry<WorkFrontmatter>[] {
 		import: 'default',
 		eager: true
 	}) as Record<string, string>;
-	return loadWorkFiles(files);
+	const experienceIds = experienceEntries().map((e) => e.data.id);
+	return loadWorkFiles(files, experienceIds);
 }
 
 export function postEntries(): ContentEntry<PostFrontmatter>[] {

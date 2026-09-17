@@ -17,7 +17,7 @@
 				{#each tabs as tab (tab.href)}
 					{@const active = tab.href === currentPath}
 					<li data-section={tab.section}>
-						<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- most tab routes (/experience/, /work/, /field/) don't exist until Phase 5; switch to resolve() once they do -->
+						<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- tab hrefs are the site's own static internal routes, resolved at prerender (design D5) -->
 						<a href={tab.href} aria-current={active ? 'page' : undefined}>
 							<span class="n" aria-hidden="true">{tab.number}:</span>
 							<span class="lbl">{tab.label}</span>

@@ -64,6 +64,16 @@ export function hasClientBundle(html: string): boolean {
 	return /rel="modulepreload"/.test(html);
 }
 
+/**
+ * `/work/` itself now ships the timeline canvas (v2 direction slice S1
+ * merged `/experience/` into `/work/`), so it's no longer zero-JS — but
+ * every `/work/<slug>/` case study still is. Drops just the work index page
+ * from a list of `work/**` html paths, keeping every case study.
+ */
+export function excludeWorkIndex(paths: string[]): string[] {
+	return paths.filter((path) => path !== 'work/index.html');
+}
+
 export function checkNoClientBundle(entries: { path: string; html: string }[]): Issue[] {
 	return entries
 		.filter((entry) => hasClientBundle(entry.html))
@@ -104,8 +114,9 @@ function main(): void {
 	}
 
 	const zeroJsFiles = [
-		...listHtmlFiles(buildDir, 'work'),
+		...excludeWorkIndex(listHtmlFiles(buildDir, 'work')),
 		...listHtmlFiles(buildDir, 'writing'),
+		...listHtmlFiles(buildDir, 'experience'),
 		'404.html'
 	].filter((path) => exists(path));
 	const zeroJsEntries = zeroJsFiles.map((path) => ({

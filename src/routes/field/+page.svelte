@@ -22,7 +22,7 @@
 	path="/field/"
 />
 
-<Pane id="field" index={4} title="field" section="field" meta="fusagasugá, co" headingLevel={1}>
+<Pane id="field" index={3} title="field" section="field" meta="fusagasugá, co" headingLevel={1}>
 	{#snippet head()}
 		<Figlet art={FIG} />
 		<figure class="banner">

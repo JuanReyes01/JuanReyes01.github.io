@@ -2,9 +2,10 @@ import type { ContentEntry } from './collections';
 import type { PostFrontmatter } from './schemas';
 
 /** The site's fixed, always-present pages (spec "Feed and sitemap coverage").
-    `/writing/` itself stays out while hidden (design D10) and `/404` is
-    never a real destination, so neither belongs here. */
-const STATIC_ROUTES = ['/', '/experience/', '/work/', '/field/'];
+    `/writing/` itself stays out while hidden (design D10), `/404` is never a
+    real destination, and `/experience/` is a redirect-only stub since v2
+    direction slice S1 merged its content into `/work/` — none belong here. */
+const STATIC_ROUTES = ['/', '/work/', '/field/'];
 
 export interface FeedItem {
 	title: string;
