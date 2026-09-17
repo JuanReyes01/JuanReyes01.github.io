@@ -112,4 +112,18 @@ describe('SkyEngine', () => {
 		expect(() => engine.setReduced(true)).not.toThrow();
 		expect(() => engine.draw(16)).not.toThrow();
 	});
+
+	it('resize()/draw() do not throw when host/textEl are missing (F1 fix — pathological caller input)', () => {
+		const { canvas } = fakeCanvas();
+		const engine = new SkyEngine({
+			canvas,
+			host: undefined as unknown as MeasurableElement,
+			textEl: undefined as unknown as MeasurableElement,
+			spaceEl: null,
+			tokens: TOKENS,
+			reduced: false
+		});
+		expect(() => engine.resize()).not.toThrow();
+		expect(() => engine.draw(0)).not.toThrow();
+	});
 });

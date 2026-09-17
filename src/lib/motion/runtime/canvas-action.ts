@@ -67,10 +67,18 @@ export function createCanvasAction<P>(
 	deps: CanvasActionDeps,
 	create: (canvas: HTMLCanvasElement, params: P, env: CanvasActionEnv) => Engine
 ): (node: HTMLCanvasElement, params: P) => CanvasActionHandle<P> {
-	return (node, params) => {
+	return (node, initialParams) => {
 		let engine: Engine | null = null;
 		let destroyed = false;
 		let unregisterScheduler: (() => void) | null = null;
+		// Mutable: `create()` below reads `params` (not `initialParams`) inside
+		// an async `.then()`, so a caller can `update()` with the real value
+		// (e.g. once a parent's `bind:this` resolves after this action's first
+		// synchronous mount) before that promise settles. See F1 in the
+		// sveltekit-migration apply-fix batch: the sky action's `host` param
+		// was `undefined` on mount and never recovered because this handle had
+		// no `update()` at all.
+		let params = initialParams;
 
 		// R1: not visible by default — nothing may play until the
 		// IntersectionObserver actually reports it, not before its first callback.
@@ -129,6 +137,9 @@ export function createCanvasAction<P>(
 		});
 
 		return {
+			update(nextParams: P) {
+				params = nextParams;
+			},
 			destroy() {
 				destroyed = true;
 				unregisterScheduler?.();

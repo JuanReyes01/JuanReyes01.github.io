@@ -262,6 +262,34 @@ describe('createCanvasAction', () => {
 		expect(intersectionDisconnected()).toBe(true);
 	});
 
+	it('creates the engine with the LATEST params when update() arrives before fonts finish loading (F1 fix)', async () => {
+		let resolveFonts: () => void = () => {};
+		const fontsPromise = new Promise<void>((resolve) => {
+			resolveFonts = resolve;
+		});
+		const { deps } = makeDeps({ loadFonts: () => fontsPromise });
+		const engine = fakeEngine();
+		const createSpy = vi.fn<
+			(
+				canvas: HTMLCanvasElement,
+				params: { host: string | undefined },
+				env: { tokens: Tokens; reduced: boolean; wake(): void }
+			) => Engine
+		>(() => engine);
+		const action = createCanvasAction(deps, createSpy);
+		const handle = action(fakeCanvas, { host: undefined });
+
+		// Simulates Svelte calling update() once a parent's bind:this resolves,
+		// which can happen before the async font-load gate closes.
+		handle.update?.({ host: 'real-host' });
+		resolveFonts();
+		await Promise.resolve();
+		await Promise.resolve();
+
+		expect(createSpy).toHaveBeenCalledTimes(1);
+		expect(createSpy.mock.calls[0][1]).toEqual({ host: 'real-host' });
+	});
+
 	it('never creates the engine if destroy() runs before fonts finish loading', async () => {
 		let resolveFonts: () => void = () => {};
 		const fontsPromise = new Promise<void>((resolve) => {

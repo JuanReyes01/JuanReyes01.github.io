@@ -20,7 +20,7 @@ function fakeDeps(): CanvasActionDeps {
 	};
 }
 
-function fakeCanvas() {
+function fakeCanvas(closest: (selector: string) => unknown = () => null) {
 	const ctx = {
 		font: '',
 		textBaseline: '',
@@ -32,11 +32,12 @@ function fakeCanvas() {
 	};
 	return {
 		getContext: () => ctx,
-		getBoundingClientRect: () => ({ width: 600, height: 300, top: 0, left: 0 })
+		getBoundingClientRect: () => ({ width: 600, height: 300, top: 0, left: 0 }),
+		closest
 	} as unknown as HTMLCanvasElement;
 }
 
-function fakeHost() {
+function fakeHost(children: Record<string, unknown> = {}) {
 	const listeners: Record<string, Array<(e: unknown) => void>> = {};
 	return {
 		addEventListener: (type: string, cb: (e: unknown) => void) => {
@@ -46,7 +47,8 @@ function fakeHost() {
 			listeners[type] = (listeners[type] ?? []).filter((l) => l !== cb);
 		},
 		fire: (type: string, event: unknown) => listeners[type]?.forEach((cb) => cb(event)),
-		getBoundingClientRect: () => ({ top: 0, left: 0, width: 600, height: 300 })
+		getBoundingClientRect: () => ({ top: 0, left: 0, width: 600, height: 300 }),
+		querySelector: (selector: string) => children[selector] ?? null
 	};
 }
 
@@ -116,6 +118,48 @@ describe('createSkyAction', () => {
 		// After a leave, speed resets to 0 for the next move (no huge jump strength).
 		const lastCall = pokeSpy.mock.calls.at(-1);
 		expect(lastCall?.[2]).toBeLessThan(3);
+		pokeSpy.mockRestore();
+	});
+
+	it('falls back to the closest .hero ancestor when host/textEl arrive undefined (F1 fix)', async () => {
+		const pokeSpy = vi.spyOn(SkyEngine.prototype, 'poke');
+		const host = fakeHost();
+		const textEl = { getBoundingClientRect: () => ({ top: 0, left: 0, width: 200, height: 40 }) };
+		host.querySelector = (selector: string) => (selector === '.hero-text' ? textEl : null);
+		const canvas = fakeCanvas((selector) => (selector === '.hero' ? host : null));
+		const attach = createSkyAction(fakeDeps());
+		attach(canvas, {
+			host: undefined as unknown as HTMLElement,
+			textEl: undefined as unknown as HTMLElement
+		});
+		await Promise.resolve();
+		await Promise.resolve();
+
+		host.fire('pointerdown', { clientX: 3, clientY: 4 });
+		expect(pokeSpy).toHaveBeenCalledWith(3, 4, 14);
+		pokeSpy.mockRestore();
+	});
+
+	it('does not throw when host/textEl are undefined and no .hero ancestor exists, then wires listeners once update() supplies them (F1 fix)', async () => {
+		const pokeSpy = vi.spyOn(SkyEngine.prototype, 'poke');
+		const attach = createSkyAction(fakeDeps());
+		const handle = attach(fakeCanvas(), {
+			host: undefined as unknown as HTMLElement,
+			textEl: undefined as unknown as HTMLElement
+		});
+		await Promise.resolve();
+		await Promise.resolve();
+
+		const host = fakeHost();
+		handle.update?.({
+			host: host as unknown as HTMLElement,
+			textEl: host as unknown as HTMLElement
+		});
+		await Promise.resolve();
+		await Promise.resolve();
+
+		host.fire('pointerdown', { clientX: 3, clientY: 4 });
+		expect(pokeSpy).toHaveBeenCalledWith(3, 4, 14);
 		pokeSpy.mockRestore();
 	});
 

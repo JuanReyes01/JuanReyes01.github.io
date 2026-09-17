@@ -34,8 +34,14 @@ export interface MeasurableElement {
 
 export interface SkyEngineOptions {
 	canvas: HTMLCanvasElement;
-	host: MeasurableElement;
-	textEl: MeasurableElement;
+	// F1 (sveltekit-migration apply-fix batch): the action layer resolves
+	// these from either `bind:this` params or a `.hero` DOM-ancestor
+	// fallback and normally always supplies them, but a caller could still
+	// pass neither (e.g. a genuinely host-less canvas) — `layoutBird()`
+	// bails out rather than throwing, the same defensive pattern `resize()`
+	// already uses for a zero-width `rect`.
+	host?: MeasurableElement;
+	textEl?: MeasurableElement;
 	spaceEl?: MeasurableElement | null;
 	tokens: Tokens;
 	reduced: boolean;
@@ -49,8 +55,8 @@ function devicePixelRatioCapped(): number {
 export class SkyEngine implements Engine {
 	private readonly canvas: HTMLCanvasElement;
 	private readonly ctx: CanvasRenderingContext2D;
-	private readonly host: MeasurableElement;
-	private readonly textEl: MeasurableElement;
+	private readonly host?: MeasurableElement;
+	private readonly textEl?: MeasurableElement;
 	private readonly spaceEl?: MeasurableElement | null;
 	private tokens: Tokens;
 	private reduced: boolean;
@@ -135,6 +141,7 @@ export class SkyEngine implements Engine {
 	}
 
 	private layoutBird(): void {
+		if (!this.host) return;
 		const hostRect = this.host.getBoundingClientRect();
 		const spaceRect = this.spaceEl?.getBoundingClientRect() ?? null;
 		// A visible "space" element (nonzero height) means the narrow, stacked
@@ -151,6 +158,7 @@ export class SkyEngine implements Engine {
 			ax = this.width - 12 - 0.8 * scale;
 			ay = top + 8 + 0.8 * scale;
 		} else {
+			if (!this.textEl) return;
 			const textRect = this.textEl.getBoundingClientRect();
 			const textRight = textRect.left + textRect.width - hostRect.left;
 			scale = Math.min(this.height / 1.85, (this.width - 72 - textRight) / 2.12);
