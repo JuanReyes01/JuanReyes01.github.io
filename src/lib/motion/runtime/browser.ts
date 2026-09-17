@@ -73,10 +73,16 @@ function createRafCoalescedResizeObserver(onResize: () => void) {
 	};
 }
 
-function createVisibilityObserver(onChange: (visible: boolean) => void) {
-	const observer = new IntersectionObserver((entries) => {
-		for (const entry of entries) onChange(entry.isIntersecting);
-	});
+/** Thresholds `[0, 0.5]` (R1) so callers get both a coarse visible/invisible
+ * flag (any overlap) and the finer ratio an engine needs to know when it has
+ * crossed 50% visible (e.g. the timeline's "start the intro" trigger). */
+export function createVisibilityObserver(onChange: (visible: boolean, ratio: number) => void) {
+	const observer = new IntersectionObserver(
+		(entries) => {
+			for (const entry of entries) onChange(entry.isIntersecting, entry.intersectionRatio);
+		},
+		{ threshold: [0, 0.5] }
+	);
 	return {
 		observe: (node: HTMLCanvasElement) => observer.observe(node),
 		disconnect: () => observer.disconnect()

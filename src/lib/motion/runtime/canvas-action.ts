@@ -24,6 +24,13 @@ export interface Engine {
 	draw(now: number): void;
 	setTheme(tokens: Tokens): void;
 	setReduced(reduced: boolean): void;
+	/**
+	 * Reports the IntersectionObserver state (R1): `visible` mirrors
+	 * `entry.isIntersecting`, `ratio` is `entry.intersectionRatio`. Every
+	 * engine defaults to "not visible" until its first call — nothing may
+	 * assume `visible: true` before the observer actually reports it.
+	 */
+	setVisibility(visible: boolean, ratio: number): void;
 	isSettled(): boolean;
 	destroy(): void;
 }
@@ -40,7 +47,9 @@ export interface CanvasActionDeps {
 	loadFonts: () => Promise<void>;
 	now: () => number;
 	createResizeObserver?: (onResize: () => void) => DisconnectableObserver;
-	createIntersectionObserver?: (onChange: (visible: boolean) => void) => DisconnectableObserver;
+	createIntersectionObserver?: (
+		onChange: (visible: boolean, ratio: number) => void
+	) => DisconnectableObserver;
 }
 
 export interface CanvasActionHandle<P> {
@@ -63,13 +72,22 @@ export function createCanvasAction<P>(
 		let destroyed = false;
 		let unregisterScheduler: (() => void) | null = null;
 
+		// R1: not visible by default — nothing may play until the
+		// IntersectionObserver actually reports it, not before its first callback.
 		const schedulable: SchedulableEngine = {
-			visible: true,
+			visible: false,
 			isSettled: () => engine?.isSettled() ?? true,
 			draw: (now) => engine?.draw(now)
 		};
+		let lastVisible = false;
+		let lastVisibleRatio = 0;
 
-		const wake = () => deps.scheduler.wake();
+		// R2: force one draw on the next tick regardless of `isSettled()`.
+		// A plain `wake()` is a no-op once the engine already reports
+		// settled — e.g. `setReduced(true)` marks a timeline settled
+		// synchronously, before anything has redrawn the now-stale canvas —
+		// so every external change below invalidates instead of just waking.
+		const wake = () => deps.scheduler.invalidate(schedulable);
 
 		const unsubscribeTheme = deps.themeWatcher.subscribe((tokens) => {
 			engine?.setTheme(tokens);
@@ -86,8 +104,11 @@ export function createCanvasAction<P>(
 		});
 		resizeObserver?.observe(node);
 
-		const intersectionObserver = deps.createIntersectionObserver?.((visible) => {
+		const intersectionObserver = deps.createIntersectionObserver?.((visible, ratio) => {
+			lastVisible = visible;
+			lastVisibleRatio = ratio;
 			schedulable.visible = visible;
+			engine?.setVisibility(visible, ratio);
 			if (visible) wake();
 		});
 		intersectionObserver?.observe(node);
@@ -99,6 +120,9 @@ export function createCanvasAction<P>(
 				reduced: deps.reducedMotionWatcher.get(),
 				wake
 			});
+			// Apply any visibility callback that already arrived before the
+			// engine existed (fonts can resolve after the observer fires).
+			engine.setVisibility(lastVisible, lastVisibleRatio);
 			engine.resize();
 			engine.draw(deps.now());
 			unregisterScheduler = deps.scheduler.add(schedulable);
