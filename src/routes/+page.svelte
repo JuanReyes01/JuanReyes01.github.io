@@ -1,35 +1,269 @@
 <script lang="ts">
 	import Pane from '$lib/components/Pane.svelte';
+	import Row from '$lib/components/Row.svelte';
+	import Tag from '$lib/components/Tag.svelte';
+	import Metric from '$lib/components/Metric.svelte';
+	import SeoHead from '$lib/components/SeoHead.svelte';
+	import { sky } from '$lib/motion/actions/sky';
 	import { buildLegacyRedirectScript } from '$lib/domain/redirects';
+	import type { PageData } from './$types';
 
-	// Built here (not inline in the markup), with both HTML tag-name
-	// literals split mid-word. HTML tokenizers (browsers, and this file's
-	// own Svelte/Prettier parser) end a script element on the literal
-	// closing-tag text alone, with no awareness of JS string/comment
-	// context — so that exact text must never appear intact in this file,
-	// including in a comment.
+	let { data }: { data: PageData } = $props();
+
+	let heroEl: HTMLDivElement | undefined = $state();
+	let heroTextEl: HTMLDivElement | undefined = $state();
+	let heroSpaceEl: HTMLDivElement | undefined = $state();
+
+	// Built here (not inline in the markup), with both HTML tag-name literals
+	// split mid-word — see Row.svelte's original comment for why this exact
+	// text must never appear intact in this file (design D8).
 	const scriptOpen = '<scr' + 'ipt>';
 	const scriptClose = '<' + '/scr' + 'ipt>';
 	const redirectHeadScript = scriptOpen + buildLegacyRedirectScript() + scriptClose;
 </script>
 
+<SeoHead
+	title="Juan Camilo Reyes — Electronics & Systems Engineer"
+	description="Electronics and systems engineer from Bogotá, Colombia. Leads AI and engineering at Creceré, building CreditBay."
+	path="/"
+/>
 <svelte:head>
-	<title>Juan Camilo Reyes</title>
 	<!-- eslint-disable-next-line svelte/no-at-html-tags -- developer-controlled, escaped redirect map (design D8), no user input -->
 	{@html redirectHeadScript}
 </svelte:head>
 
-<Pane id="about" index={1} title="home" section="about" meta="bogotá · utc−5">
-	<p>
-		The full home page — hero, now/how index, and links — lands in a later PR. This placeholder
-		proves the design-system shell (tokens, fonts, Pane, TabBar) end to end.
-	</p>
+<Pane id="about" index={1} title="home" section="about" meta="bogotá · utc−5" headingLevel={1}>
+	<div class="hero" bind:this={heroEl}>
+		<div class="hero-text" bind:this={heroTextEl}>
+			<p class="prompt"><b>juan@laptop</b>:~$ whoami</p>
+			<h2 id="hello">Hello, I'm Juan<span class="cursor" aria-hidden="true">_</span></h2>
+			<!-- eslint-disable-next-line svelte/no-at-html-tags -- server-rendered from src/content/pages/home.md via the validated markdown pipeline, not user input -->
+			{@html data.bioHtml}
+			<ul class="links">
+				<li>
+					<a href="https://github.com/JuanReyes01" rel="me noopener" target="_blank">[ github ↗ ]</a
+					>
+				</li>
+				<li>
+					<a
+						href="https://www.linkedin.com/in/juan-camilo-reyes-11442b223/"
+						rel="me noopener"
+						target="_blank">[ linkedin ↗ ]</a
+					>
+				</li>
+			</ul>
+		</div>
+		<div class="hero-veil" aria-hidden="true"></div>
+		<div class="hero-space" bind:this={heroSpaceEl} aria-hidden="true"></div>
+		<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- not a link -->
+		<canvas aria-hidden="true" use:sky={{ host: heroEl, textEl: heroTextEl, spaceEl: heroSpaceEl }}
+		></canvas>
+	</div>
+
+	<div class="index">
+		<Pane id="now" title="now" nested headingLevel={2} meta="sep 2026">
+			<ul class="idx">
+				{#each data.now as item (item.title)}
+					<Row title={item.title} desc={item.desc} variant="bullet" scramble={false}>
+						{#snippet aside()}
+							{#each item.tags as tag (tag)}<Tag label={tag} />{/each}
+						{/snippet}
+					</Row>
+				{/each}
+			</ul>
+		</Pane>
+		<Pane id="how" title="how I work" nested headingLevel={2}>
+			<ul class="idx">
+				{#each data.how as item (item.title)}
+					<Row title={item.title} desc={item.desc} variant="bullet" scramble={false}>
+						{#snippet aside()}
+							{#each item.tags as tag (tag)}<Tag label={tag} />{/each}
+						{/snippet}
+					</Row>
+				{/each}
+			</ul>
+		</Pane>
+	</div>
+
+	{#if data.highlights.length}
+		<div class="highlights">
+			<h2>Selected builds</h2>
+			<ol class="rows">
+				{#each data.highlights as build (build.slug)}
+					<Row
+						index={build.build}
+						title={build.title}
+						desc={build.summary}
+						href="/work/{build.slug}/"
+					>
+						{#snippet aside()}<Metric
+								value={build.metric.value}
+								label={build.metric.label}
+							/>{/snippet}
+					</Row>
+				{/each}
+			</ol>
+			<p class="more-link">
+				<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- /work/ exists as of this PR -->
+				<a href="/work/">All builds →</a>
+			</p>
+		</div>
+	{/if}
 </Pane>
 
 <style>
-	p {
+	.hero {
+		position: relative;
+		min-height: 400px;
+		display: flex;
+		flex-direction: column;
+		justify-content: center;
+		background: var(--banner);
+		border: 1px solid color-mix(in srgb, var(--pc, var(--cyan)) 22%, var(--line));
+		border-radius: 4px;
+		overflow: hidden;
+		touch-action: pan-y;
+	}
+	.hero canvas {
+		position: absolute;
+		inset: 0;
+		width: 100%;
+		height: 100%;
+		display: block;
+		z-index: 0;
+	}
+	.hero-veil {
+		position: absolute;
+		inset: 0;
+		z-index: 1;
+		pointer-events: none;
+		background: linear-gradient(90deg, var(--veil) 0, var(--veil) 27rem, transparent 30rem);
+	}
+	.hero-text {
+		position: relative;
+		z-index: 2;
+		max-width: 27rem;
+		padding: 34px 28px;
+	}
+	.hero-space {
+		display: none;
+		position: relative;
+		z-index: 1;
+	}
+	.prompt {
+		font-family: var(--font-mono);
+		font-size: var(--fs-sm);
+		color: var(--muted);
+		margin: 0 0 6px;
+	}
+	.prompt b {
+		color: var(--pc, var(--cyan));
+		font-weight: 500;
+	}
+	h2#hello {
+		font-family: var(--font-mono);
+		font-weight: 500;
+		font-size: var(--fs-xl);
+		line-height: 1.1;
+		letter-spacing: -0.02em;
+		margin: 0 0 18px;
+	}
+	.cursor {
+		color: var(--pc, var(--cyan));
+		animation: blink 1.1s steps(1) infinite;
+	}
+	@keyframes blink {
+		50% {
+			opacity: 0;
+		}
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.cursor {
+			animation: none;
+		}
+	}
+	.hero-text :global(p) {
+		margin: 0 0 14px;
 		color: var(--fg-2);
-		max-width: 66ch;
+		font-size: 0.96rem;
+	}
+	.hero-text :global(p strong) {
+		color: var(--fg);
+		font-weight: 500;
+	}
+	.links {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 6px 18px;
+		list-style: none;
+		margin: 4px 0 0;
+		padding: 0;
+		font-family: var(--font-mono);
+		font-size: 0.84rem;
+	}
+	.links a {
+		text-decoration: none;
+	}
+	.links a:hover {
+		text-decoration: underline;
+	}
+
+	.index {
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: 26px 14px;
+		margin-top: 30px;
+	}
+	.idx {
+		list-style: none;
 		margin: 0;
+		padding: 0;
+	}
+	.highlights {
+		margin-top: 30px;
+	}
+	.highlights h2 {
+		font-family: var(--font-mono);
+		font-size: var(--fs-sm);
+		text-transform: uppercase;
+		letter-spacing: 0.04em;
+		color: var(--muted);
+		margin: 0 0 6px;
+	}
+	.rows {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+	}
+	.more-link {
+		margin: 10px 2px 0;
+		font-family: var(--font-mono);
+		font-size: var(--fs-sm);
+	}
+
+	@media (max-width: 760px) {
+		.hero {
+			justify-content: flex-start;
+			min-height: 0;
+		}
+		.hero-text {
+			max-width: none;
+			padding: 24px 18px 6px;
+		}
+		.hero-veil {
+			background: linear-gradient(
+				180deg,
+				var(--veil) 0,
+				var(--veil) calc(100% - 300px),
+				transparent calc(100% - 250px)
+			);
+		}
+		.hero-space {
+			display: block;
+			height: 270px;
+		}
+		.index {
+			grid-template-columns: minmax(0, 1fr);
+		}
 	}
 </style>
