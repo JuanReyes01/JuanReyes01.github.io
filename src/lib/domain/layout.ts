@@ -16,7 +16,9 @@ export function layoutFor(widthPx: number, t: Timeline): LayoutResult {
 	const totalMonths = t.last - t.epoch + 1;
 	const availableCols = Math.max(0, Math.floor((widthPx - lab * CHAR_PX) / CHAR_PX));
 	const step: 1 | 2 = totalMonths <= availableCols ? 1 : 2;
-	const cols = Math.ceil(totalMonths / step);
+	// `+7` mirrors the legacy engine's trailing padding for the "HEAD" label
+	// past the trunk's last commit, so the last month never overflows the grid.
+	const cols = lab + Math.ceil(totalMonths / step) + 7;
 
 	return { lab, step, cols, rows };
 }
