@@ -10,7 +10,23 @@ export default defineConfig({
 				runes: ({ filename }) =>
 					filename.split(/[/\\]/).includes('node_modules') ? undefined : true
 			},
-			adapter: adapter()
+			adapter: adapter(),
+			prerender: {
+				handleHttpError: ({ path, message }) => {
+					// TabBar (design-system shell, PR2) links to every section up
+					// front; /experience/, /work/ and /field/ don't exist as routes
+					// until Phase 5 of the sveltekit-migration SDD change lands.
+					// Downgrade only those known, temporary 404s to a warning so the
+					// prerender crawler doesn't fail the build; any other broken
+					// link still fails it.
+					const pendingRoutes = ['/experience/', '/work/', '/field/'];
+					if (pendingRoutes.includes(path)) {
+						console.warn(`(pending route, lands in Phase 5) ${message}`);
+						return;
+					}
+					throw new Error(message);
+				}
+			}
 		})
 	],
 	test: {

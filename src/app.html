@@ -2,11 +2,37 @@
 <html lang="en">
 	<head>
 		<meta charset="utf-8" />
-		<meta name="viewport" content="width=device-width, initial-scale=1" />
-		<meta name="text-scale" content="scale" />
+		<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+		<meta name="color-scheme" content="dark light" />
+		<link rel="icon" href="/favicon.svg" type="image/svg+xml" />
 		%sveltekit.head%
 	</head>
-	<body data-sveltekit-preload-data="hover">
+	<body data-sveltekit-reload>
 		<div style="display: contents">%sveltekit.body%</div>
+		<script>
+			// Fills the status-bar clock before any bundled JS loads (design D5:
+			// no visible flash). Kept in sync by hand with the tested formatter
+			// at src/lib/domain/clock.ts — app.html is plain HTML, not part of
+			// Vite's module graph, so it cannot import that module.
+			(function () {
+				var el = document.querySelector('[data-clock]');
+				if (!el) return;
+				var fmt;
+				try {
+					fmt = new Intl.DateTimeFormat('en-GB', {
+						hour: '2-digit',
+						minute: '2-digit',
+						timeZone: 'America/Bogota'
+					});
+				} catch (e) {
+					return;
+				}
+				var tick = function () {
+					el.textContent = fmt.format(new Date());
+				};
+				tick();
+				setInterval(tick, 15000);
+			})();
+		</script>
 	</body>
 </html>
