@@ -290,6 +290,22 @@ describe('createCanvasAction', () => {
 		expect(createSpy.mock.calls[0][1]).toEqual({ host: 'real-host' });
 	});
 
+	it('registers the engine with the scheduler even if its very first draw() throws (one bad frame must not orphan the engine forever)', async () => {
+		const { deps } = makeDeps();
+		const engine = fakeEngine();
+		engine.draw = () => {
+			throw new Error('boom');
+		};
+		const addSpy = vi.spyOn(deps.scheduler, 'add');
+		const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+		createCanvasAction(deps, () => engine)(fakeCanvas, {});
+		await Promise.resolve();
+		await Promise.resolve();
+
+		expect(addSpy).toHaveBeenCalledTimes(1);
+		errorSpy.mockRestore();
+	});
+
 	it('never creates the engine if destroy() runs before fonts finish loading', async () => {
 		let resolveFonts: () => void = () => {};
 		const fontsPromise = new Promise<void>((resolve) => {
