@@ -65,7 +65,7 @@
 			<ul class="idx">
 				{#each data.now as item (item.title)}
 					<Row title={item.title} desc={item.desc} variant="bullet" scramble={false}>
-						{#snippet aside()}
+						{#snippet tags()}
 							{#each item.tags as tag (tag)}<Tag label={tag} />{/each}
 						{/snippet}
 					</Row>
@@ -76,7 +76,7 @@
 			<ul class="idx">
 				{#each data.how as item (item.title)}
 					<Row title={item.title} desc={item.desc} variant="bullet" scramble={false}>
-						{#snippet aside()}
+						{#snippet tags()}
 							{#each item.tags as tag (tag)}<Tag label={tag} />{/each}
 						{/snippet}
 					</Row>
@@ -213,6 +213,10 @@
 		grid-template-columns: repeat(2, minmax(0, 1fr));
 		gap: 26px 14px;
 		margin-top: 30px;
+		/* F6 (sveltekit-migration apply-fix batch): without this, both panes
+		   stretch to match whichever list is longer, leaving a large empty
+		   block under the shorter one. */
+		align-items: start;
 	}
 	.idx {
 		list-style: none;
