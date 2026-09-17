@@ -195,6 +195,12 @@ describe('TimelineEngine', () => {
 		expect(ctx.fillText).toHaveBeenCalled();
 	});
 
+	it('sets ctx.font to JetBrains Mono at the computed cell size during resize, before any fillText (E1)', () => {
+		const { ctx } = makeEngine({ reduced: true }); // makeEngine() already calls resize()
+		expect(ctx.font).toMatch(/JetBrains Mono/);
+		expect(ctx.fillText).not.toHaveBeenCalled(); // font is set before the first draw(), not inside it
+	});
+
 	it('setReduced(true) mid-flight parks the timeline at HEAD', () => {
 		const { engine } = makeEngine({ reduced: false });
 		engine.setVisibility(true, 0.5); // E2: the intro only starts once visible
