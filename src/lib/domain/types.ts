@@ -54,12 +54,21 @@ export interface LayoutResult {
 	rows: number;
 }
 
-export type GridCellKind = 'empty' | 'lane' | 'node' | 'link';
+/**
+ * Cell purpose, mirrored from the legacy canvas engine's own `kind` tags —
+ * the motion engine (PR4) uses this to decide what to dim/glow, so it must
+ * stay a closed, meaningful set rather than a generic "filled/empty" flag.
+ */
+export type GridCellKind =
+	'empty' | 'axis' | 'trunk' | 'fork' | 'v' | 'h' | 'corner' | 'commit' | 'head' | 'label';
+
+/** Lane accent colors plus the neutral tone used for axis/trunk chrome. */
+export type GridColor = LaneColor | 'neutral';
 
 export interface GridCell {
 	chs: string;
 	kind: GridCellKind;
-	color?: LaneColor;
+	color?: GridColor;
 	lane?: string;
 	mon?: Month;
 }
