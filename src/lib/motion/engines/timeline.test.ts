@@ -4,6 +4,7 @@ import { parseMonth } from '../../domain/month';
 import type { Timeline } from '../../domain/types';
 import type { Readout } from '../../domain/readout';
 import type { Tokens } from '../runtime/tokens';
+import type { Engine } from '../runtime/canvas-action';
 
 const TOKENS: Tokens = {
 	bg: '#000',
@@ -116,53 +117,36 @@ describe('TimelineEngine', () => {
 		expect(readout.text).toBe('Milestone'); // the latest event at month 10 (HEAD)
 	});
 
-	it('is not settled mid-intro and settles once the 6s intro finishes', () => {
-		const { engine } = makeEngine({ reduced: false });
-		engine.setVisibility(true, 0.5); // E2: the intro only starts once visible
+	it("renders fully lit and settled at HEAD immediately at first paint, with no automatic intro (owner decision, v2 direction slice S1: kill the timeline's automatic epoch sweep)", () => {
+		const { engine, onReadout } = makeEngine({ reduced: false });
 		engine.draw(0);
-		expect(engine.isSettled()).toBe(false);
+		expect(engine.isSettled()).toBe(true);
+		expect(onReadout).toHaveBeenCalledWith(expect.objectContaining({ text: 'Milestone' }));
+	});
+
+	it('stays settled at HEAD across further frames with no input — nothing animates on its own', () => {
+		const { engine } = makeEngine({ reduced: false });
+		engine.draw(0);
+		engine.draw(1000);
 		engine.draw(6000);
 		expect(engine.isSettled()).toBe(true);
 	});
 
-	it('does not start the intro until the visibility ratio reaches >= 0.5 for the first time (E2)', () => {
+	it('setVisibility() is a no-op — there is no intro left to gate on visibility (owner decision: kill the automatic epoch sweep), same as the sky and band engines (R1)', () => {
 		const { engine } = makeEngine({ reduced: false });
-		engine.draw(0); // never became visible — stays parked, not mid-intro
-		expect(engine.isSettled()).toBe(true);
-		engine.draw(3000);
-		expect(engine.isSettled()).toBe(true);
-
-		engine.setVisibility(true, 0.4); // below the 0.5 threshold — still not enough
-		engine.draw(3016);
-		expect(engine.isSettled()).toBe(true);
-
-		engine.setVisibility(true, 0.5); // crosses the threshold — intro starts now
-		engine.draw(3032);
-		expect(engine.isSettled()).toBe(false);
+		expect(() => (engine as Engine).setVisibility(true, 0.9)).not.toThrow();
 	});
 
-	it('never plays if it never becomes visible (E2)', () => {
-		const { engine } = makeEngine({ reduced: false });
-		for (let now = 0; now <= 6000; now += 1000) engine.draw(now);
-		expect(engine.isSettled()).toBe(true);
-	});
-
-	it('plays the intro only once even if visibility flickers after it started (E2)', () => {
-		const { engine } = makeEngine({ reduced: false });
-		engine.setVisibility(true, 0.6);
+	it('setReduced(true) resets a scrubbed-away playhead back to HEAD', () => {
+		const { engine, onReadout } = makeEngine({ reduced: false });
 		engine.draw(0);
-		expect(engine.isSettled()).toBe(false);
-		engine.setVisibility(false, 0);
-		engine.setVisibility(true, 0.6);
-		engine.draw(6000);
-		expect(engine.isSettled()).toBe(true); // finished the same 6s intro, not restarted
-	});
-
-	it('parks at HEAD immediately under reduced motion even if it never becomes visible (E2)', () => {
-		const { engine, onReadout } = makeEngine({ reduced: true });
-		engine.draw(0); // no setVisibility() call at all
+		engine.scrub(EPOCH + 2);
+		engine.draw(1);
+		onReadout.mockClear();
+		engine.setReduced(true);
+		engine.draw(2);
 		expect(engine.isSettled()).toBe(true);
-		expect(onReadout.mock.calls[0][0].text).toBe('Milestone'); // parked at HEAD, not month 0
+		expect(onReadout).toHaveBeenCalledWith(expect.objectContaining({ text: 'Milestone' }));
 	});
 
 	it('fires onReadout only when the displayed month actually changes', () => {
@@ -246,16 +230,6 @@ describe('TimelineEngine', () => {
 		expect(ctx.fillText).toHaveBeenCalled();
 	});
 
-	it('setReduced(true) mid-flight parks the timeline at HEAD', () => {
-		const { engine } = makeEngine({ reduced: false });
-		engine.setVisibility(true, 0.5); // E2: the intro only starts once visible
-		engine.draw(0);
-		expect(engine.isSettled()).toBe(false);
-		engine.setReduced(true);
-		engine.draw(1);
-		expect(engine.isSettled()).toBe(true);
-	});
-
 	it('monthAtClientX converts a pointer position to a clamped month', () => {
 		const { engine } = makeEngine({ reduced: true });
 		expect(engine.monthAtClientX(130)).toBe(EPOCH); // near the left edge of the grid body (epoch, not 0)
@@ -263,12 +237,11 @@ describe('TimelineEngine', () => {
 		expect(engine.monthAtClientX(9999)).toBe(LAST); // clamps past HEAD
 	});
 
-	it('the very first frame (idle, before the intro starts) reports a valid readout at `epoch`, never an invalid month like "0-01" (regression: absolute Month domain, not legacy relative offsets)', () => {
+	it('the very first frame reports a valid readout at HEAD, never an invalid month like "0-01" (regression: absolute Month domain, not legacy relative offsets)', () => {
 		const { engine, onReadout } = makeEngine({ reduced: false });
-		engine.draw(0); // never became visible yet — still idle, has not entered
+		engine.draw(0);
 		expect(onReadout).toHaveBeenCalled();
 		const date = onReadout.mock.calls[0][0].date;
 		expect(() => parseMonth(date)).not.toThrow();
-		expect(date).toBe('2019-08');
 	});
 });

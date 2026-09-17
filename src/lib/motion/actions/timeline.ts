@@ -1,11 +1,11 @@
 /**
- * The experience timeline action (design D16, owner rule: "pointer
+ * The career timeline action on `/work/` (design D16, owner rule: "pointer
  * hover/drag (and touch) scrubs; arrow keys + Home/End scrub only while
  * the canvas is focused"). Wires the shared canvas lifecycle to
  * `TimelineEngine`, then ports the legacy pointer/keyboard scrub wiring.
- * `focusLane(id)` is exposed on the action handle for row hover/focus to
- * call — the actual row markup and a11y attributes (`role="slider"`, etc.)
- * land in PR5. `createTimelineAction` takes injected deps so the
+ * `focusLane(id)` is exposed on the action handle for role/build row
+ * hover/focus to call, so both lists cross-highlight the matching lane
+ * (v2 direction slice S1). `createTimelineAction` takes injected deps so the
  * interaction logic is unit-tested without a real canvas action.
  */
 import { createCanvasAction, type CanvasActionDeps } from '../runtime/canvas-action';

@@ -1,19 +1,16 @@
-export const INTRO_MS = 6000;
 export const RELEASE_MS = 1500;
 export const RETURN_MS = 600;
 
-export type PlaybackMode = 'idle' | 'intro' | 'rest' | 'scrub' | 'return';
+export type PlaybackMode = 'rest' | 'scrub' | 'return';
 
 export interface Playback {
 	mode: PlaybackMode;
 	P: number;
-	startedAt: number;
 	releasedAt: number;
 	focusLane: string | null;
 }
 
 export type PlaybackEvent =
-	| { type: 'enter' }
 	| { type: 'scrub'; P: number }
 	| { type: 'key'; key: string }
 	| { type: 'release' }
@@ -23,20 +20,12 @@ export interface PlaybackContext {
 	last: number;
 	/**
 	 * The timeline's earliest month (`Timeline.epoch`, design D4) — the
-	 * playhead's lower bound. This must NEVER be literal `0`: `Month` is an
-	 * absolute `year*12+(month-1)` index (design D1), so `0` means "January,
-	 * year 0", not "the start of the timeline". The legacy canvas engine used
-	 * a timeline-relative month numbering where `0` genuinely meant "the
-	 * start", which is why this bound didn't exist there — porting that
-	 * literal `0` into the absolute-month domain produced an out-of-range
-	 * playhead (`formatMonth(0)` = `"0-01"`, which fails `parseMonth`'s
-	 * 4-digit-year check) and left the grid washed out at `FUTURE_ALPHA` for
-	 * most of the intro, since almost every real cell's month sits far above
-	 * `0`.
+	 * playhead's lower bound for scrubbing. This must NEVER be literal `0`:
+	 * `Month` is an absolute `year*12+(month-1)` index (design D1), so `0`
+	 * means "January, year 0", not "the start of the timeline".
 	 */
 	epoch: number;
 	step: 1 | 2;
-	reduced: boolean;
 }
 
 function clamp(v: number, lo: number, hi: number): number {
@@ -48,17 +37,16 @@ function easeOutCubic(t: number): number {
 }
 
 /**
- * Pure playback state machine for the experience timeline (design D4 /
- * motion table). No DOM, no timers — `now` is passed in by the caller so
- * this stays trivially testable with a fake clock.
+ * Pure playback state machine for the timeline (design D4 / motion table,
+ * updated per v2 direction slice S1: the timeline has no automatic intro —
+ * the owner disliked the automatic epoch sweep, so the graph renders
+ * complete and at rest from the very first frame; the playhead only moves
+ * on pointer scrub, arrow keys, or row hover/focus). No DOM, no timers —
+ * `now` is passed in by the caller so this stays trivially testable with a
+ * fake clock.
  */
 export function reduce(s: Playback, e: PlaybackEvent, now: number, c: PlaybackContext): Playback {
 	switch (e.type) {
-		case 'enter':
-			return c.reduced
-				? { ...s, mode: 'rest', P: c.last, startedAt: now, releasedAt: 0 }
-				: { ...s, mode: 'intro', P: c.epoch, startedAt: now, releasedAt: 0 };
-
 		case 'scrub':
 			return { ...s, mode: 'scrub', P: clamp(e.P, c.epoch, c.last), releasedAt: 0 };
 
@@ -100,20 +88,17 @@ function keyDelta(
 }
 
 /**
- * Computes the displayed playhead position for the current instant. Time
- * transitions (intro easing, the post-release pause, the glide home) live
- * here so `reduce` never needs a synthetic tick event.
+ * Computes the displayed playhead position for the current instant. `rest`
+ * and `scrub` report their stored `P` immediately — there is no automatic
+ * animation to ease through. `return` (the glide back to HEAD after a
+ * pointer/touch release away from HEAD) is the only mode with a time-based
+ * transition, so it's the only one that lives here instead of in `reduce`.
  */
 export function positionAt(
 	s: Playback,
 	now: number,
-	c: { last: number; epoch: number }
+	c: { last: number }
 ): { P: number; settled: boolean } {
-	if (s.mode === 'intro') {
-		const t = clamp((now - s.startedAt) / INTRO_MS, 0, 1);
-		return { P: c.epoch + easeOutCubic(t) * (c.last - c.epoch), settled: t >= 1 };
-	}
-
 	if (s.mode === 'return') {
 		const sincePause = now - s.releasedAt;
 		if (sincePause < RELEASE_MS) return { P: s.P, settled: false };
