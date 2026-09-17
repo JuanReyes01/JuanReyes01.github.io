@@ -1,6 +1,11 @@
 import type { ContentEntry } from './collections';
 import type { PostFrontmatter } from './schemas';
 
+/** The site's fixed, always-present pages (spec "Feed and sitemap coverage").
+    `/writing/` itself stays out while hidden (design D10) and `/404` is
+    never a real destination, so neither belongs here. */
+const STATIC_ROUTES = ['/', '/experience/', '/work/', '/field/'];
+
 export interface FeedItem {
 	title: string;
 	link: string;
@@ -48,6 +53,17 @@ export function buildRss(siteUrl: string, items: FeedItem[]): string {
 		`<rss version="2.0"><channel><title>Juan Camilo Reyes</title>` +
 		`<link>${escapeXml(siteUrl)}</link>${entries}</channel></rss>`
 	);
+}
+
+/** Every route the sitemap must cover: the fixed static pages, one per work
+    case study, and one per published (non-draft) writing post. */
+export function sitemapRoutes(
+	workSlugs: string[],
+	posts: ContentEntry<PostFrontmatter>[]
+): string[] {
+	const workRoutes = workSlugs.map((slug) => `/work/${slug}/`);
+	const postRoutes = posts.filter((p) => !p.data.draft).map((p) => `/writing/${p.slug}/`);
+	return [...STATIC_ROUTES, ...workRoutes, ...postRoutes];
 }
 
 export function buildSitemap(siteUrl: string, urls: SitemapUrl[]): string {
