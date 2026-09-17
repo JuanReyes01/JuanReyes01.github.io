@@ -117,6 +117,14 @@ export class TimelineEngine implements Engine {
 		// removed by Svelte — nothing else to release here.
 	}
 
+	/** Converts a pointer's `clientX` into the target month, clamped to the timeline's range. */
+	monthAtClientX(clientX: number): number {
+		const rect = this.canvas.getBoundingClientRect();
+		const col = Math.floor((clientX - rect.left) / this.cw);
+		const month = this.timeline.epoch + (col - this.layout.lab) * this.layout.step;
+		return Math.min(this.timeline.last, Math.max(0, month));
+	}
+
 	/** Scrubs the playhead to an absolute month (pointer/touch/keyboard input from the action layer). */
 	scrub(month: number): void {
 		this.state = reduce(this.state, { type: 'scrub', P: month }, this.now(), this.context());
