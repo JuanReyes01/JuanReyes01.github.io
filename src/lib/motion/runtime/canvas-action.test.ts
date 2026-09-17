@@ -24,6 +24,7 @@ function fakeEngine(): Engine & { resizeCalls: number; draws: number[] } {
 		},
 		setTheme: vi.fn(),
 		setReduced: vi.fn(),
+		setVisibility: vi.fn(),
 		isSettled: () => false,
 		destroy: vi.fn()
 	};
@@ -32,14 +33,14 @@ function fakeEngine(): Engine & { resizeCalls: number; draws: number[] } {
 function makeDeps(overrides: Partial<CanvasActionDeps> = {}): {
 	deps: CanvasActionDeps;
 	fireResize: () => void;
-	fireIntersection: (visible: boolean) => void;
+	fireIntersection: (visible: boolean, ratio: number) => void;
 	fireTheme: () => void;
 	fireReduced: (reduced: boolean) => void;
 	resizeDisconnected: () => boolean;
 	intersectionDisconnected: () => boolean;
 } {
 	let resizeCb: (() => void) | null = null;
-	let intersectionCb: ((visible: boolean) => void) | null = null;
+	let intersectionCb: ((visible: boolean, ratio: number) => void) | null = null;
 	let themeCb: ((tokens: Tokens) => void) | null = null;
 	let reducedCb: ((reduced: boolean) => void) | null = null;
 	let resizeDisconnected = false;
@@ -83,7 +84,7 @@ function makeDeps(overrides: Partial<CanvasActionDeps> = {}): {
 	return {
 		deps,
 		fireResize: () => resizeCb?.(),
-		fireIntersection: (visible) => intersectionCb?.(visible),
+		fireIntersection: (visible, ratio) => intersectionCb?.(visible, ratio),
 		fireTheme: () => themeCb?.({} as Tokens),
 		fireReduced: (reduced) => reducedCb?.(reduced),
 		resizeDisconnected: () => resizeDisconnected,
@@ -138,35 +139,35 @@ describe('createCanvasAction', () => {
 		expect(env.reduced).toBe(true);
 	});
 
-	it('resizes the engine and wakes the scheduler on a ResizeObserver callback', async () => {
+	it('resizes the engine and invalidates the scheduler on a ResizeObserver callback', async () => {
 		const { deps, fireResize } = makeDeps();
 		const engine = fakeEngine();
-		const wakeSpy = vi.spyOn(deps.scheduler, 'wake');
+		const invalidateSpy = vi.spyOn(deps.scheduler, 'invalidate');
 		createCanvasAction(deps, () => engine)(fakeCanvas, {});
 		await Promise.resolve();
 		await Promise.resolve();
 
 		fireResize();
 		expect(engine.resizeCalls).toBe(2);
-		expect(wakeSpy).toHaveBeenCalled();
+		expect(invalidateSpy).toHaveBeenCalled();
 	});
 
-	it('tracks visibility from the IntersectionObserver and wakes on becoming visible', async () => {
+	it('tracks visibility from the IntersectionObserver and invalidates on becoming visible', async () => {
 		const { deps, fireIntersection } = makeDeps();
 		const engine = fakeEngine();
-		const wakeSpy = vi.spyOn(deps.scheduler, 'wake');
+		const invalidateSpy = vi.spyOn(deps.scheduler, 'invalidate');
 		createCanvasAction(deps, () => engine)(fakeCanvas, {});
 		await Promise.resolve();
 		await Promise.resolve();
 
-		fireIntersection(true);
-		expect(wakeSpy).toHaveBeenCalled();
+		fireIntersection(true, 0.6);
+		expect(invalidateSpy).toHaveBeenCalled();
 	});
 
-	it('forwards theme and reduced-motion changes to the engine and wakes the scheduler', async () => {
+	it('forwards theme and reduced-motion changes to the engine and invalidates the scheduler', async () => {
 		const { deps, fireTheme, fireReduced } = makeDeps();
 		const engine = fakeEngine();
-		const wakeSpy = vi.spyOn(deps.scheduler, 'wake');
+		const invalidateSpy = vi.spyOn(deps.scheduler, 'invalidate');
 		createCanvasAction(deps, () => engine)(fakeCanvas, {});
 		await Promise.resolve();
 		await Promise.resolve();
@@ -175,7 +176,76 @@ describe('createCanvasAction', () => {
 		expect(engine.setTheme).toHaveBeenCalledTimes(1);
 		fireReduced(true);
 		expect(engine.setReduced).toHaveBeenCalledWith(true);
-		expect(wakeSpy).toHaveBeenCalled();
+		expect(invalidateSpy).toHaveBeenCalled();
+	});
+
+	it('registers the schedulable engine as not-visible until the IntersectionObserver first reports it (R1)', async () => {
+		const { deps, fireIntersection } = makeDeps();
+		const engine = fakeEngine();
+		const addSpy = vi.spyOn(deps.scheduler, 'add');
+		createCanvasAction(deps, () => engine)(fakeCanvas, {});
+		await Promise.resolve();
+		await Promise.resolve();
+
+		const schedulable = addSpy.mock.calls[0][0];
+		expect(schedulable.visible).toBe(false); // no default-true before the first observer callback
+
+		fireIntersection(true, 0.6);
+		expect(schedulable.visible).toBe(true);
+	});
+
+	it('forwards the visibility flag and intersection ratio to the engine via setVisibility (R1)', async () => {
+		const { deps, fireIntersection } = makeDeps();
+		const engine = fakeEngine();
+		createCanvasAction(deps, () => engine)(fakeCanvas, {});
+		await Promise.resolve();
+		await Promise.resolve();
+
+		fireIntersection(true, 0.6);
+		expect(engine.setVisibility).toHaveBeenCalledWith(true, 0.6);
+		fireIntersection(false, 0);
+		expect(engine.setVisibility).toHaveBeenCalledWith(false, 0);
+	});
+
+	it('applies a visibility change that arrived before fonts finished loading, once the engine is created (R1)', async () => {
+		let resolveFonts: () => void = () => {};
+		const fontsPromise = new Promise<void>((resolve) => {
+			resolveFonts = resolve;
+		});
+		const { deps, fireIntersection } = makeDeps({ loadFonts: () => fontsPromise });
+		const engine = fakeEngine();
+		createCanvasAction(deps, () => engine)(fakeCanvas, {});
+
+		fireIntersection(true, 0.7); // the observer can fire before fonts (and the engine) exist
+		resolveFonts();
+		await Promise.resolve();
+		await Promise.resolve();
+
+		expect(engine.setVisibility).toHaveBeenCalledWith(true, 0.7);
+	});
+
+	it('env.wake() forces a redraw via scheduler.invalidate even when the engine reports settled (R2 — no deadlock)', async () => {
+		const { deps } = makeDeps();
+		const engine = fakeEngine();
+		engine.isSettled = () => true; // e.g. the timeline resting at HEAD
+		let capturedWake: () => void = () => {};
+		const createSpy = vi.fn<
+			(
+				canvas: HTMLCanvasElement,
+				params: object,
+				env: { tokens: Tokens; reduced: boolean; wake(): void }
+			) => Engine
+		>((_canvas, _params, env) => {
+			capturedWake = env.wake;
+			return engine;
+		});
+		createCanvasAction(deps, createSpy)(fakeCanvas, {});
+		await Promise.resolve();
+		await Promise.resolve();
+
+		const invalidateSpy = vi.spyOn(deps.scheduler, 'invalidate');
+		capturedWake();
+		expect(invalidateSpy).toHaveBeenCalled();
 	});
 
 	it('destroy() tears down the engine, observers and subscriptions', async () => {
