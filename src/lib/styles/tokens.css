@@ -50,12 +50,12 @@
 		--status-bg: #e3e8f2;
 		--veil: rgba(227, 232, 242, 0.93);
 
-		--cyan: #08796a;
+		--cyan: #087365;
 		--magenta: #7040c4;
 		--yellow: #8a5d0c;
-		--green: #2a7a38;
+		--green: #287435;
 		--blue: #2863b0;
-		--pink: #c42d55;
+		--pink: #ba2b51;
 
 		color-scheme: light;
 	}
@@ -75,12 +75,12 @@
 	--status-bg: #e3e8f2;
 	--veil: rgba(227, 232, 242, 0.93);
 
-	--cyan: #08796a;
+	--cyan: #087365;
 	--magenta: #7040c4;
 	--yellow: #8a5d0c;
-	--green: #2a7a38;
+	--green: #287435;
 	--blue: #2863b0;
-	--pink: #c42d55;
+	--pink: #ba2b51;
 
 	color-scheme: light;
 }
