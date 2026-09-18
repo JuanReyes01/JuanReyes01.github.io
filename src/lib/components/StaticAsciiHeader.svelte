@@ -27,7 +27,9 @@
 <div class="ascii-header">
 	<pre class="field raw-glyphs" aria-hidden="true">{fieldText}</pre>
 	<div class="title">
-		<Figlet {art} />
+		<div class="title-veil">
+			<Figlet {art} />
+		</div>
 	</div>
 </div>
 
@@ -62,9 +64,35 @@
 		z-index: 1;
 		padding: 14px 18px;
 	}
+	/* Coordinator correction (site/v2-direction slice S3, apply-fix round
+	   1): same veil idiom as AsciiHeaderFrame — the figlet stays crisp text
+	   on top of the field, not blended into it. */
+	.title-veil {
+		padding: 14px 26px;
+		border-radius: 8px;
+		background: radial-gradient(
+			ellipse at center,
+			var(--veil) 0%,
+			var(--veil) 55%,
+			transparent 100%
+		);
+	}
+	/* Same reasoning as AsciiHeaderFrame: a smaller, corner-anchored title
+	   leaves most of the field visible instead of the veil covering it. */
+	.title-veil :global(.fig) {
+		font-size: clamp(0.85rem, 0.5rem + 1.8vw, 1.7rem);
+	}
 	@media (max-width: 760px) {
 		.field {
 			font-size: 0.36rem;
+		}
+	}
+	@media (max-width: 480px) {
+		.title-veil :global(.fig) {
+			font-size: 0.5rem;
+		}
+		.title-veil {
+			padding: 8px 14px;
 		}
 	}
 </style>
