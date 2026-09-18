@@ -26,12 +26,13 @@ import {
 	sampleWaveform,
 	pokeWave1D,
 	stepWave1D,
+	softClip,
 	traceGlyph,
 	waveformPokeAmount,
 	DISPLAY_GAIN,
 	type WaveSignature
 } from '../fields/waveform';
-import { clamp, clamp01 } from '../fields/math';
+import { clamp01 } from '../fields/math';
 import { tokenRgba, type Tokens } from '../runtime/tokens';
 import { colorsForSection, type Section } from '../../site';
 import {
@@ -50,10 +51,18 @@ import type { Engine } from '../runtime/canvas-action';
 const MIN_ROWS = 5;
 const FONT_PX = 11;
 const REDUCED_SEED_T = 3;
-/** Deliberately slow — "at most a slow ambient drift" (owner rule): the
- * strip is always technically animating while visible (never `isSettled()`),
- * but this keeps the idle motion calm rather than lively. */
-const AMBIENT_DRIFT_SPEED = 0.12;
+/** Medium-intensity port (owner-approved header prototype v5): the resting
+ * wave travels at this many rad/s — ported verbatim from the prototype's own
+ * `WAVE_AMBIENT` (its intensity control itself is not shipped, so "medium",
+ * multiplier 1, is hard-coded as this single constant), replacing the
+ * earlier, much slower 0.12 tuning. */
+const AMBIENT_DRIFT_SPEED = 0.85;
+/** Medium-intensity port: three 1D damped-wave substeps per frame — a single
+ * step per frame dies out before it goes anywhere; three substeps (at
+ * damping 0.96, see `fields/waveform.ts`) let a poke actually travel ~45
+ * columns and settle in ~2.7s. Ported verbatim from the prototype's own
+ * `WAVE_SUBSTEPS`. */
+const WAVE_SUBSTEPS = 3;
 /** The default, calm signature shown before any build has been hovered/focused. */
 const DEFAULT_SIGNATURE: WaveSignature = deriveWaveSignature('default');
 
@@ -161,15 +170,20 @@ export class WaveformEngine implements Engine {
 		if (!this.cols) return;
 		const t = this.reduced ? REDUCED_SEED_T : REDUCED_SEED_T + (now / 1000) * AMBIENT_DRIFT_SPEED;
 		if (!this.reduced && this.ripple) {
-			const { next, prev } = stepWave1D(this.cols, this.ripple.current, this.ripple.previous);
-			this.ripple = { current: next, previous: prev };
+			for (let sub = 0; sub < WAVE_SUBSTEPS; sub++) {
+				const { next, prev } = stepWave1D(this.cols, this.ripple.current, this.ripple.previous);
+				this.ripple = { current: next, previous: prev };
+			}
 		}
 
 		const heightAt = (col: number): number => {
 			const xn = this.cols > 1 ? col / (this.cols - 1) : 0;
 			const base = sampleWaveform(xn, this.signature, t);
 			const displaced = this.ripple ? base + this.ripple.current[col] * 0.5 : base;
-			return clamp(displaced * DISPLAY_GAIN, -1, 1);
+			// Medium-intensity port: `softClip` (linear to 0.8, tanh beyond)
+			// replaces the old hard `clamp(...,-1,1)` — a hard poke dents the
+			// line instead of flattening it against the frame.
+			return softClip(displaced * DISPLAY_GAIN);
 		};
 		const rowAt = (col: number): number => {
 			const h = heightAt(col);

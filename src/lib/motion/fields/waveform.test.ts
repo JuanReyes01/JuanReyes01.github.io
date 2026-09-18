@@ -7,7 +7,8 @@ import {
 	stepWave1D,
 	traceGlyph,
 	staticWaveformRows,
-	waveformPokeAmount
+	waveformPokeAmount,
+	softClip
 } from './waveform';
 
 describe('hashString', () => {
@@ -104,15 +105,21 @@ describe('sampleWaveform', () => {
 });
 
 describe('pokeWave1D', () => {
-	it('adds full-strength energy at the center index and half-strength at its neighbors', () => {
+	// Medium-intensity port (owner-approved header prototype v5): "poke
+	// radius 2" — the deform now reaches 2 cells out on either side (5 taps
+	// total), tapering as `1 - |d|/3` (matching the prototype's own
+	// `WaveHeader.poke()`), not just the immediate neighbor.
+	it('adds full-strength energy at the center, tapering by (1 - |d|/3) over a radius of 2', () => {
 		const buf = new Float32Array(10);
-		pokeWave1D(buf, 10, 5, 4);
-		expect(buf[5]).toBe(4);
-		expect(buf[4]).toBe(2);
-		expect(buf[6]).toBe(2);
+		pokeWave1D(buf, 10, 5, 3);
+		expect(buf[5]).toBeCloseTo(3); // d=0 -> full
+		expect(buf[4]).toBeCloseTo(3 * (1 - 1 / 3)); // d=-1 -> 2
+		expect(buf[6]).toBeCloseTo(3 * (1 - 1 / 3)); // d=+1 -> 2
+		expect(buf[3]).toBeCloseTo(3 * (1 - 2 / 3)); // d=-2 -> 1
+		expect(buf[7]).toBeCloseTo(3 * (1 - 2 / 3)); // d=+2 -> 1
 	});
 
-	it("never writes to the 1px border (matches the 2D ripple's bounds guard)", () => {
+	it("never writes to the 1px border cell itself (matches the 2D ripple's bounds guard)", () => {
 		const buf = new Float32Array(10);
 		pokeWave1D(buf, 10, 0, 5);
 		pokeWave1D(buf, 10, 9, 5);
@@ -122,24 +129,54 @@ describe('pokeWave1D', () => {
 });
 
 describe('waveformPokeAmount', () => {
-	// Prototype: "var amount = Math.min(0.55, strength * 0.06); /* A dent in
-	// the line, not a spike that slams it into the frame. */" — ported
-	// verbatim.
-	it('scales a moderate strength linearly by 0.06', () => {
-		expect(waveformPokeAmount(4)).toBeCloseTo(0.24);
+	// Medium-intensity port (owner-approved header prototype v5): "gain 0.18
+	// per unit of pointer force with a cap of 2.4" — replaces the prior
+	// 0.06/0.55 tuning now that `softClip` (not a hard clamp) absorbs a
+	// bigger poke without flattening the strip.
+	it('scales a moderate strength linearly by 0.18', () => {
+		expect(waveformPokeAmount(4)).toBeCloseTo(0.72);
 	});
 
-	it('caps at 0.55 regardless of how large the strength gets', () => {
-		expect(waveformPokeAmount(10)).toBe(0.55);
-		expect(waveformPokeAmount(500)).toBe(0.55);
+	it('caps at 2.4 regardless of how large the strength gets', () => {
+		expect(waveformPokeAmount(20)).toBe(2.4);
+		expect(waveformPokeAmount(500)).toBe(2.4);
+	});
+});
+
+describe('softClip', () => {
+	// Medium-intensity port: "linear to 0.8, tanh beyond" — a hard poke never
+	// flattens the strip against the frame the way a hard clamp would.
+	it('passes values within +-0.8 through unchanged (linear region)', () => {
+		expect(softClip(0.5)).toBe(0.5);
+		expect(softClip(-0.3)).toBe(-0.3);
+		expect(softClip(0.8)).toBe(0.8);
+		expect(softClip(-0.8)).toBe(-0.8);
+	});
+
+	it('eases values beyond 0.8 toward +-1 instead of clamping hard at the threshold', () => {
+		const clipped = softClip(1.5);
+		expect(clipped).toBeGreaterThan(0.8);
+		expect(clipped).toBeLessThan(1);
+	});
+
+	it('never reaches or exceeds 1 in magnitude for a large-but-not-float-saturating value', () => {
+		expect(Math.abs(softClip(2))).toBeLessThan(1);
+	});
+
+	it('is bounded at 1 even at floating-point saturation for an extreme value', () => {
+		expect(Math.abs(softClip(1000))).toBeLessThanOrEqual(1);
+	});
+
+	it('is symmetric: softClip(-v) === -softClip(v)', () => {
+		expect(softClip(-2)).toBeCloseTo(-softClip(2));
 	});
 });
 
 describe('stepWave1D', () => {
-	// Coordinator correction (approved header prototype port): "this scheme
-	// decays by sqrt(damping) per step, not by damping, so 0.74 is what gives
-	// ~0.86/step: a poke is gone in about a second" — the prototype's own
-	// tuned default, replacing the 2D ripple's slower 0.94.
+	// Medium-intensity port (owner-approved header prototype v5): the default
+	// damping is now 0.96 (was 0.74) — combined with 3 substeps/frame at the
+	// engine level, this is what lets a pulse travel ~45 columns and settle
+	// in ~2.7s, instead of dying out almost immediately.
 	it('computes each interior cell as (neighbor average * 0.5 - previous) * damping', () => {
 		const size = 3;
 		const current = new Float32Array(3);
@@ -149,7 +186,7 @@ describe('stepWave1D', () => {
 		previous[1] = 1;
 
 		const { next, prev } = stepWave1D(size, current, previous);
-		const expected = ((4 + 2) * 0.5 - 1) * 0.74;
+		const expected = ((4 + 2) * 0.5 - 1) * 0.96;
 		expect(next[1]).toBeCloseTo(expected);
 		expect(prev).toBe(current); // buffer swap: old "current" becomes the new "previous"
 	});
@@ -160,7 +197,7 @@ describe('stepWave1D', () => {
 		const previous = new Float32Array(3);
 		previous[1] = 2;
 		const { next } = stepWave1D(size, current, previous);
-		expect(next[1]).toBeCloseTo((0 - 2) * 0.74);
+		expect(next[1]).toBeCloseTo((0 - 2) * 0.96);
 	});
 
 	// Prototype: "the snap to zero below a threshold is what makes it
@@ -170,7 +207,7 @@ describe('stepWave1D', () => {
 		const size = 3;
 		const current = new Float32Array(3);
 		const previous = new Float32Array(3);
-		previous[1] = 0.005; // (0 - 0.005) * 0.74 = -0.0037, under the threshold
+		previous[1] = 0.004; // (0 - 0.004) * 0.96 = -0.00384, under the threshold
 		const { next } = stepWave1D(size, current, previous);
 		expect(next[1]).toBe(0);
 	});

@@ -85,20 +85,24 @@ export function sampleWaveform(x: number, sig: WaveSignature, t: number): number
 }
 
 /** Caps a raw pointer-speed strength into the small amount of wave energy a
- * poke should actually add — ported verbatim from the owner-approved header
+ * poke should actually add — ported from the owner-approved header
  * prototype's own `WaveHeader.poke()`: "a dent in the line, not a spike
  * that slams it into the frame." Below the cap it scales linearly; above it
- * (a fast drag or a hard pointerdown) it flattens out at 0.55 instead of
- * growing unbounded. */
+ * (a fast drag or a hard pointerdown) it flattens out instead of growing
+ * unbounded. Medium-intensity tuning: gain 0.18 per unit of pointer force,
+ * capped at 2.4 — `softClip` (not this cap alone) is what keeps a hard poke
+ * from flattening the strip against the frame. */
 export function waveformPokeAmount(strength: number): number {
-	return Math.min(0.55, strength * 0.06);
+	return Math.min(2.4, strength * 0.18);
 }
 
 /**
- * Adds wave energy at `index` and its 2 neighbors (full strength at the
- * center, half strength around it), skipping the buffer's 1px border — the
- * 1D analog of `fields/ripple.ts`'s `pokeRipple`, for the waveform's own
- * pointer-deform interaction.
+ * Adds wave energy at `index` and its 4 neighbors (2 on each side), full
+ * strength at the center and tapering by `1 - |d|/3` outward — the 1D analog
+ * of `fields/ripple.ts`'s `pokeRipple`, for the waveform's own pointer-deform
+ * interaction. Medium-intensity port (owner-approved header prototype v5):
+ * "poke radius 2", ported verbatim from the prototype's own
+ * `WaveHeader.poke()` falloff.
  */
 export function pokeWave1D(
 	buffer: Float32Array,
@@ -106,11 +110,25 @@ export function pokeWave1D(
 	index: number,
 	strength: number
 ): void {
-	for (let d = -1; d <= 1; d++) {
+	for (let d = -2; d <= 2; d++) {
 		const i = index + d;
 		if (i < 1 || i >= size - 1) continue;
-		buffer[i] += strength * (d === 0 ? 1 : 0.5);
+		buffer[i] += strength * (1 - Math.abs(d) / 3);
 	}
+}
+
+/**
+ * Keeps a poked wave inside the strip smoothly instead of a hard clamp:
+ * linear for `|v| <= 0.8`, then eases toward +-1 via `tanh` beyond that.
+ * Medium-intensity port (owner-approved header prototype v5): "a hard poke
+ * never flattens against the frame" — ported verbatim from the prototype's
+ * own `softClip()`.
+ */
+export function softClip(v: number): number {
+	const magnitude = Math.abs(v);
+	if (magnitude <= 0.8) return v;
+	const sign = v < 0 ? -1 : 1;
+	return sign * (0.8 + 0.2 * Math.tanh((magnitude - 0.8) / 0.2));
 }
 
 /** Below this magnitude a step snaps straight to zero (prototype: "the snap
@@ -125,16 +143,16 @@ const SETTLE_THRESHOLD = 0.004;
  * `fields/ripple.ts`'s `stepRipple` (same discrete wave equation), computed
  * into a fresh buffer rather than mutating `previous` in place.
  *
- * Damping ported verbatim from the owner-approved header prototype: "this
- * scheme decays by sqrt(damping) per step, not by damping, so 0.74 is what
- * gives ~0.86/step — a poke is gone in about a second," faster than the
- * slower 2D ripple's own 0.94.
+ * Medium-intensity port (owner-approved header prototype v5): damping is now
+ * 0.96 (was 0.74) — combined with the engine calling this 3 times per frame
+ * (`WAVE_SUBSTEPS`), this is what lets a pulse actually travel ~45 columns
+ * and settle in ~2.7s, instead of dying out almost on the spot.
  */
 export function stepWave1D(
 	size: number,
 	current: Float32Array,
 	previous: Float32Array,
-	damping = 0.74
+	damping = 0.96
 ): { next: Float32Array; prev: Float32Array } {
 	const next = new Float32Array(size);
 	for (let i = 1; i < size - 1; i++) {
