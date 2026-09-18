@@ -4,7 +4,6 @@
 	import Tag from '$lib/components/Tag.svelte';
 	import Metric from '$lib/components/Metric.svelte';
 	import SeoHead from '$lib/components/SeoHead.svelte';
-	import Figlet from '$lib/components/Figlet.svelte';
 	import { sky } from '$lib/motion/actions/sky';
 	import { buildLegacyRedirectScript } from '$lib/domain/redirects';
 	import type { PageData } from './$types';
@@ -19,14 +18,6 @@
 	const scriptOpen = '<scr' + 'ipt>';
 	const scriptClose = '<' + '/scr' + 'ipt>';
 	const redirectHeadScript = scriptOpen + buildLegacyRedirectScript() + scriptClose;
-
-	// pyfiglet, font "standard" (apply-fix batch, owner request R2: every tab
-	// gets a figlet header matching its name — home had none until now).
-	const FIG = `_   _  ___  __  __ _____
-| | | |/ _ \\|  \\/  | ____|
-| |_| | | | | |\\/| |  _|
-|  _  | |_| | |  | | |___
-|_| |_|\\___/|_|  |_|_____|`;
 </script>
 
 <SeoHead
@@ -41,11 +32,20 @@
 
 <Pane id="about" index={1} title="home" section="about" meta="bogotá · utc−5" headingLevel={1}>
 	<div class="hero" bind:this={heroEl}>
+		<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- not a link -->
+		<canvas aria-hidden="true" use:sky={{ host: heroEl }}></canvas>
+		<div class="hero-veil" aria-hidden="true"></div>
+		<!-- Approved header prototype: "ONE composition, text over field" —
+		     the character field fills the whole header and the hero text
+		     sits on top of it (no separate figlet card, no text column
+		     beside the canvas). -->
 		<div class="hero-text">
 			<p class="prompt"><b>juan@laptop</b>:~$ whoami</p>
 			<h2 id="hello">Hello, I'm Juan<span class="cursor" aria-hidden="true">_</span></h2>
-			<!-- eslint-disable-next-line svelte/no-at-html-tags -- server-rendered from src/content/pages/home.md via the validated markdown pipeline, not user input -->
-			{@html data.bioHtml}
+			<div class="bio">
+				<!-- eslint-disable-next-line svelte/no-at-html-tags -- server-rendered from src/content/pages/home.md via the validated markdown pipeline, not user input -->
+				{@html data.bioHtml}
+			</div>
 			<ul class="links">
 				<li>
 					<a href="https://github.com/JuanReyes01" rel="me noopener" target="_blank">[ github ↗ ]</a
@@ -59,17 +59,6 @@
 					>
 				</li>
 			</ul>
-		</div>
-		<div class="hero-veil" aria-hidden="true"></div>
-		<div class="hero-space" aria-hidden="true"></div>
-		<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- not a link -->
-		<canvas aria-hidden="true" use:sky={{ host: heroEl }}></canvas>
-		<!-- owner decision site/v2-direction slice S3, item B: the reference
-		     artifact's large figlet name "overlaid on" the character field —
-		     positioned clear of the hero-text column, pointer-events:none so
-		     the field underneath still receives the ripple. -->
-		<div class="hero-figlet" aria-hidden="true">
-			<Figlet art={FIG} />
 		</div>
 	</div>
 
@@ -125,12 +114,16 @@
 </Pane>
 
 <style>
+	/* Approved header prototype (study 1 — home, "approved as-is"): ONE
+	   full-bleed composition — the character field fills the entire header
+	   and the hero text sits at the bottom of it over a soft veil, never a
+	   text column drawn beside the canvas. */
 	.hero {
 		position: relative;
-		min-height: 400px;
+		min-height: 560px;
 		display: flex;
 		flex-direction: column;
-		justify-content: center;
+		justify-content: flex-end;
 		background: var(--banner);
 		border: 1px solid color-mix(in srgb, var(--pc, var(--cyan)) 22%, var(--line));
 		border-radius: 4px;
@@ -145,55 +138,32 @@
 		display: block;
 		z-index: 0;
 	}
+	/* Soft bottom wash + a pool under the text — never a hard left-to-right
+	   wipe, or the header reads as "art on one side, words on the other"
+	   instead of one composition. Home carries the most copy, so its own
+	   wash is deeper than a generic header's (prototype: `.s-home
+	   .band::after`). */
 	.hero-veil {
 		position: absolute;
 		inset: 0;
 		z-index: 1;
 		pointer-events: none;
-		background: linear-gradient(90deg, var(--veil) 0, var(--veil) 27rem, transparent 30rem);
+		background:
+			linear-gradient(to top, var(--veil) 0%, var(--veil) 46%, transparent 76%),
+			radial-gradient(
+				ellipse 64rem 34rem at 6% 74%,
+				var(--veil) 0%,
+				var(--veil) 42%,
+				transparent 80%
+			);
 	}
 	.hero-text {
 		position: relative;
 		z-index: 2;
-		max-width: 27rem;
-		padding: 34px 28px;
+		padding: 0 28px 34px;
 	}
-	/* design #4938 slice S2: no longer sized for the hummingbird (moved to
-	   /field/) — just reserves room below the hero text on narrow viewports
-	   so the character field is still visible there, not only on desktop. */
-	.hero-space {
-		display: none;
-		position: relative;
-		z-index: 1;
-	}
-	.hero-figlet {
-		position: absolute;
-		z-index: 1;
-		right: 4%;
-		bottom: 6%;
-		max-width: 56%;
-		pointer-events: none;
-		padding: 12px 22px;
-		border-radius: 8px;
-		/* Coordinator correction (site/v2-direction slice S3, apply-fix
-		   round 1): "keep the figlet as crisp TEXT sitting on top of the
-		   field... with enough contrast (a veil or a text shadow)" — full
-		   opacity text over a veil panel, not a faded watermark blended
-		   into the field. */
-		background: radial-gradient(
-			ellipse at center,
-			var(--veil) 0%,
-			var(--veil) 55%,
-			transparent 100%
-		);
-	}
-	.hero-figlet :global(.fig) {
-		text-align: right;
-	}
-	@media (max-width: 760px) {
-		.hero-figlet {
-			display: none;
-		}
+	.bio {
+		max-width: 56ch;
 	}
 	.prompt {
 		font-family: var(--font-mono);
@@ -292,24 +262,17 @@
 
 	@media (max-width: 760px) {
 		.hero {
-			justify-content: flex-start;
-			min-height: 0;
+			/* The same rem-sized veil covers proportionally more of a narrow
+			   frame on its own (prototype: no separate mobile veil needed) —
+			   only the header's own height grows, so both bio paragraphs
+			   still have room to read above the fold. */
+			min-height: 600px;
 		}
 		.hero-text {
-			max-width: none;
-			padding: 24px 18px 6px;
+			padding: 0 18px 24px;
 		}
-		.hero-veil {
-			background: linear-gradient(
-				180deg,
-				var(--veil) 0,
-				var(--veil) calc(100% - 300px),
-				transparent calc(100% - 250px)
-			);
-		}
-		.hero-space {
-			display: block;
-			height: 270px;
+		.bio {
+			font-size: 0.92rem;
 		}
 		.index {
 			grid-template-columns: minmax(0, 1fr);
