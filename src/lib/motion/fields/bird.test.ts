@@ -15,11 +15,15 @@ function frameAt(t: number): BirdFrame {
 }
 
 describe('computeBirdMotion', () => {
+	// Medium-intensity port (owner-approved header prototype v5): sway raised
+	// 0.012 -> 0.04 and bob raised 0.02 -> 0.055 so the hover reads at real
+	// scale now that the bird is large — the 1.1 Hz wingbeat itself is
+	// unchanged (it stays in place, it does not follow the pointer).
 	it('computes sway (bx), bob (by) and the 1.1 Hz wingbeat phase from time', () => {
 		const t = 2.5;
 		const m = computeBirdMotion(t, false);
-		expect(m.bx).toBeCloseTo(0.012 * Math.sin(t * 0.5));
-		expect(m.by).toBeCloseTo(0.02 * Math.sin(t * 0.8));
+		expect(m.bx).toBeCloseTo(0.04 * Math.sin(t * 0.5));
+		expect(m.by).toBeCloseTo(0.055 * Math.sin(t * 0.8));
 		expect(m.ph).toBeCloseTo(t * Math.PI * 2 * 1.1);
 	});
 
@@ -131,9 +135,19 @@ describe('sampleBird', () => {
 		expect(s?.value).toBeCloseTo(0.55, 3);
 	});
 
+	// The sample point is computed from `computeBirdMotion`'s own bx/by/ph
+	// rather than a hardcoded literal, so retuning sway/bob amplitude (this
+	// batch: 0.012/0.02 -> 0.04/0.055) doesn't require re-deriving magic
+	// numbers by hand — the assertion still exercises `sampleBird`'s own
+	// ellipse hit-test (a point placed exactly at the far-wing ellipse's
+	// center must classify as `farwing` with fill factor 1, i.e. value 0.65).
 	it('classifies the far wing once mid-wingbeat separates it from the near wing (ph=PI)', () => {
 		const tHalf = Math.PI / (2 * Math.PI * 1.1);
-		const s = sampleBird(0.04778839623715914, -0.3819317304746857, frameAt(tHalf));
+		const frame = frameAt(tHalf);
+		const farAngle = -1.3 + 0.5 * Math.sin(frame.ph + 0.4);
+		const x = 0.02 + frame.bx + Math.cos(farAngle) * 0.33;
+		const y = -0.06 + frame.by + Math.sin(farAngle) * 0.33;
+		const s = sampleBird(x, y, frame);
 		expect(s?.key).toBe('farwing');
 		expect(s?.value).toBeCloseTo(0.65, 3);
 	});

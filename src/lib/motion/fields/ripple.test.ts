@@ -2,17 +2,22 @@ import { describe, it, expect } from 'vitest';
 import { pokeRipple, stepRipple } from './ripple';
 
 describe('pokeRipple', () => {
-	it('adds full strength to the poked cell and half strength to its 8 neighbors', () => {
+	// Medium-intensity port (owner-approved header prototype v5): every poke
+	// is scaled by a RIPPLE_GAIN of 2.4 before it lands in the buffer — the
+	// intensity control itself is not shipped, so "medium" (multiplier 1) is
+	// hard-coded as this gain living inside `pokeRipple`, same as the
+	// prototype's own `s = strength * RIPPLE_GAIN * I.ripple`.
+	it('gains the incoming strength by 2.4 before adding it: full strength at center, half of the gained amount at its 8 neighbors', () => {
 		const cols = 5;
 		const rows = 5;
 		const buf = new Float32Array(cols * rows);
 		pokeRipple(buf, cols, rows, 2, 2, 10);
 
-		expect(buf[2 * cols + 2]).toBe(10); // center: dx=0,dy=0
-		expect(buf[2 * cols + 1]).toBe(5); // west
-		expect(buf[2 * cols + 3]).toBe(5); // east
-		expect(buf[1 * cols + 2]).toBe(5); // north
-		expect(buf[1 * cols + 1]).toBe(5); // NW corner of the 3x3
+		expect(buf[2 * cols + 2]).toBeCloseTo(24); // center: 10 * 2.4
+		expect(buf[2 * cols + 1]).toBeCloseTo(12); // west: half of 24
+		expect(buf[2 * cols + 3]).toBeCloseTo(12); // east
+		expect(buf[1 * cols + 2]).toBeCloseTo(12); // north
+		expect(buf[1 * cols + 1]).toBeCloseTo(12); // NW corner of the 3x3
 	});
 
 	it('ignores neighbors that would land on the 1px border, matching the legacy guard', () => {
@@ -24,18 +29,18 @@ describe('pokeRipple', () => {
 		expect(buf[0 * cols + 0]).toBe(0);
 		expect(buf[0 * cols + 1]).toBe(0);
 		expect(buf[1 * cols + 0]).toBe(0);
-		// the in-bounds neighbors still get poked.
-		expect(buf[1 * cols + 1]).toBe(10);
-		expect(buf[1 * cols + 2]).toBe(5);
+		// the in-bounds neighbors still get poked, gained by 2.4.
+		expect(buf[1 * cols + 1]).toBeCloseTo(24);
+		expect(buf[1 * cols + 2]).toBeCloseTo(12);
 	});
 
-	it('accumulates across repeated pokes instead of overwriting', () => {
+	it('accumulates across repeated (gained) pokes instead of overwriting', () => {
 		const cols = 5;
 		const rows = 5;
 		const buf = new Float32Array(cols * rows);
 		pokeRipple(buf, cols, rows, 2, 2, 10);
 		pokeRipple(buf, cols, rows, 2, 2, 4);
-		expect(buf[2 * cols + 2]).toBe(14);
+		expect(buf[2 * cols + 2]).toBeCloseTo(24 + 4 * 2.4); // 33.6
 	});
 });
 

@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { resolveSkyColor } from './sky-palette';
+import { tokenRgba } from '../runtime/tokens';
 import type { Tokens } from '../runtime/tokens';
 
 const TOKENS: Tokens = {
@@ -50,5 +51,14 @@ describe('resolveSkyColor', () => {
 		expect(resolveSkyColor('b1', TOKENS)).toMatch(/^rgba\(/);
 		expect(resolveSkyColor('m0', TOKENS)).toMatch(/^rgba\(/);
 		expect(resolveSkyColor('m1', TOKENS)).toMatch(/^rgba\(/);
+	});
+
+	// Medium-intensity port (owner-approved header prototype v5): the faint
+	// ("0"-suffixed) ambient tone is raised from alpha 0.26 to 0.33 so the
+	// field's own low end still reads as visible texture, not near-invisible.
+	it('raises the faint ambient tone alpha to 0.33 (up from 0.26)', () => {
+		expect(resolveSkyColor('c0', TOKENS)).toBe(tokenRgba(TOKENS.cyan, 0.33));
+		expect(resolveSkyColor('b0', TOKENS)).toBe(tokenRgba(TOKENS.blue, 0.33));
+		expect(resolveSkyColor('m0', TOKENS)).toBe(tokenRgba(TOKENS.magenta, 0.33));
 	});
 });
