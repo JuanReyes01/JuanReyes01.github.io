@@ -17,7 +17,7 @@ import { cloudField } from '../fields/clouds';
 import { pokeRipple, stepRipple } from '../fields/ripple';
 import { ditherOffset4x4 } from '../fields/dither';
 import { clamp01 } from '../fields/math';
-import { pickGlyph, DENSITY_RAMP } from '../fields/glyphs';
+import { densityGlyph } from '../fields/glyphs';
 import { resolveSkyColor } from './sky-palette';
 import {
 	drawCharGrid,
@@ -30,17 +30,6 @@ import type { Tokens } from '../runtime/tokens';
 
 /** The legacy engine's fixed reduced-motion pose ("Static frame (t=11.3)"). */
 const REDUCED_SEED_T = 11.3;
-/**
- * Minimum gradient magnitude (in the cloud field's own 0-1 units, sampled
- * one grid cell apart) to treat a cell as a real edge instead of a flat
- * interior (owner decision #4938 item 6: "the theme is ASCII ART, but super
- * advanced" — trace the clouds' shapes with directional glyphs, keep their
- * soft interiors on the density ramp). Tuned against real headless-browser
- * screenshots of the hero at common widths: low enough that cloud silhouette
- * boundaries clearly pick up `- | / \`, high enough that the field's own
- * gentle internal shading doesn't turn into edge noise.
- */
-const EDGE_THRESHOLD = 0.16;
 
 export interface SkyEngineOptions {
 	canvas: HTMLCanvasElement;
@@ -156,32 +145,6 @@ export class SkyEngine implements Engine {
 		ctx.clearRect(0, 0, this.width, this.height);
 		ctx.textBaseline = 'top';
 
-		// The gradient-sampling field for directional-glyph selection (owner
-		// decision #4938 item 6): the ripple's smooth spatial distortion is
-		// included (so a ripple wavefront can itself get outlined), but NOT
-		// the per-cell `ditherOffset4x4` jitter added to `value` below — that
-		// offset tiles every 4 cells and would inject a fake high-frequency
-		// gradient into every flat interior, turning calm cloud fills into
-		// edge noise instead of tracing real shapes.
-		const cellField = (cx: number, cy: number): number => {
-			let fx = cx;
-			let fy = cy;
-			if (this.ripple && cx > 0 && cy > 0 && cx < this.cols - 1 && cy < this.rows - 1) {
-				const i = cy * this.cols + cx;
-				const r = this.ripple.current;
-				fx += (r[i + 1] - r[i - 1]) * 1.5;
-				fy += (r[i + this.cols] - r[i - this.cols]) * 1.5;
-			}
-			return cloudField(
-				(px, py) => sampleTexture(this.textureA, px, py),
-				(px, py) => sampleTexture(this.textureB, px, py),
-				fx * unitX,
-				fy * unitY,
-				t,
-				heightUnits
-			);
-		};
-
 		drawCharGrid(ctx, this.cols, this.rows, this.ch, (x, y) => {
 			let colorKey: Parameters<typeof resolveSkyColor>[0];
 
@@ -208,10 +171,13 @@ export class SkyEngine implements Engine {
 				heightUnits
 			);
 			value = clamp01(value + boost + ditherOffset4x4(x, y) * 0.09);
-			const glyph = pickGlyph(cellField, x, y, value, {
-				edgeThreshold: EDGE_THRESHOLD,
-				ramp: DENSITY_RAMP
-			});
+			// Owner correction (site/v2-direction slice S3, apply-fix round
+			// 1): "ambient fields use the density ramp only" — the cloud
+			// field is procedural noise with no real, coherent shape to
+			// trace, so it no longer calls `pickGlyph`'s directional-edge
+			// logic; a plain density lookup keeps it calm background texture
+			// instead of inventing false edges everywhere.
+			const glyph = densityGlyph(value);
 			if (glyph === ' ') return null;
 			if (boost > 0.35) {
 				colorKey = energy > 0 ? 'hotP' : 'hotC';
