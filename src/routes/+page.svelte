@@ -40,10 +40,6 @@
 </svelte:head>
 
 <Pane id="about" index={1} title="home" section="about" meta="bogotá · utc−5" headingLevel={1}>
-	{#snippet head()}
-		<Figlet art={FIG} />
-	{/snippet}
-
 	<div class="hero" bind:this={heroEl}>
 		<div class="hero-text">
 			<p class="prompt"><b>juan@laptop</b>:~$ whoami</p>
@@ -68,6 +64,13 @@
 		<div class="hero-space" aria-hidden="true"></div>
 		<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- not a link -->
 		<canvas aria-hidden="true" use:sky={{ host: heroEl }}></canvas>
+		<!-- owner decision site/v2-direction slice S3, item B: the reference
+		     artifact's large figlet name "overlaid on" the character field —
+		     positioned clear of the hero-text column, pointer-events:none so
+		     the field underneath still receives the ripple. -->
+		<div class="hero-figlet" aria-hidden="true">
+			<Figlet art={FIG} />
+		</div>
 	</div>
 
 	<div class="index">
@@ -162,6 +165,23 @@
 		display: none;
 		position: relative;
 		z-index: 1;
+	}
+	.hero-figlet {
+		position: absolute;
+		z-index: 1;
+		right: 4%;
+		bottom: 6%;
+		max-width: 56%;
+		opacity: 0.6;
+		pointer-events: none;
+	}
+	.hero-figlet :global(.fig) {
+		text-align: right;
+	}
+	@media (max-width: 760px) {
+		.hero-figlet {
+			display: none;
+		}
 	}
 	.prompt {
 		font-family: var(--font-mono);

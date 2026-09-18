@@ -3,8 +3,9 @@
 	import Pane from '$lib/components/Pane.svelte';
 	import Row from '$lib/components/Row.svelte';
 	import Metric from '$lib/components/Metric.svelte';
-	import Figlet from '$lib/components/Figlet.svelte';
+	import AsciiHeaderFrame from '$lib/components/AsciiHeaderFrame.svelte';
 	import SeoHead from '$lib/components/SeoHead.svelte';
+	import { headerField } from '$lib/motion/actions/header-field';
 	import { timeline as timelineAction } from '$lib/motion/actions/timeline';
 	import type { TimelineActionHandle } from '$lib/motion/actions/timeline';
 	import { parseMonth, monthLabel, monthFromDate } from '$lib/domain/month';
@@ -79,7 +80,11 @@
 	headingLevel={1}
 >
 	{#snippet head()}
-		<Figlet art={FIG} />
+		<AsciiHeaderFrame art={FIG}>
+			{#snippet canvas()}
+				<canvas use:headerField={{ section: 'work' }}></canvas>
+			{/snippet}
+		</AsciiHeaderFrame>
 	{/snippet}
 
 	<div class="tl">

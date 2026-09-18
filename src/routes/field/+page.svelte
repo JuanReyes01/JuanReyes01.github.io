@@ -2,7 +2,7 @@
 	import Pane from '$lib/components/Pane.svelte';
 	import Row from '$lib/components/Row.svelte';
 	import AsciiDiagram from '$lib/components/AsciiDiagram.svelte';
-	import Figlet from '$lib/components/Figlet.svelte';
+	import AsciiHeaderFrame from '$lib/components/AsciiHeaderFrame.svelte';
 	import SeoHead from '$lib/components/SeoHead.svelte';
 	import { band } from '$lib/motion/actions/band';
 	import type { PageData } from './$types';
@@ -24,10 +24,11 @@
 
 <Pane id="field" index={3} title="field" section="field" meta="fusagasugá, co" headingLevel={1}>
 	{#snippet head()}
-		<Figlet art={FIG} />
-		<figure class="banner">
-			<canvas aria-hidden="true" use:band></canvas>
-		</figure>
+		<AsciiHeaderFrame art={FIG}>
+			{#snippet canvas()}
+				<canvas use:band></canvas>
+			{/snippet}
+		</AsciiHeaderFrame>
 	{/snippet}
 
 	<!-- eslint-disable-next-line svelte/no-at-html-tags -- server-rendered from src/content/pages/field.md via the validated markdown pipeline, not user input -->
@@ -54,21 +55,6 @@
 </Pane>
 
 <style>
-	.banner {
-		margin: 0;
-		/* design D15's motion table ("Band /field"): the band is a tall
-		   protagonist, not a thin strip — also gives the hummingbird (design
-		   #4938 slice S2) enough vertical resolution to read clearly. */
-		height: clamp(160px, 24vw, 260px);
-		border: 1px solid var(--line);
-		border-radius: 4px;
-		overflow: hidden;
-	}
-	.banner canvas {
-		display: block;
-		width: 100%;
-		height: 100%;
-	}
 	.prose {
 		max-width: 68ch;
 		color: var(--fg-2);
