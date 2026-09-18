@@ -278,23 +278,19 @@
 
 	@media (max-width: 760px) {
 		.hero {
-			/* Medium-intensity port (v5): height floor drops with the desktop
-			   one — content (prompt/title/bio/links) drives the real height
-			   from here, same as desktop. */
-			min-height: 320px;
+			/* On a phone the copy alone is ~330px tall and runs edge to edge,
+			   so at the old 320px floor the text filled the entire header and
+			   the field had nowhere left to show. The floor buys a band of
+			   clear field ABOVE the copy — the same relationship the desktop
+			   composition gets from its width. */
+			min-height: 560px;
 		}
-		/* A narrow column needs a ROUNDER pool (prototype: "or the copy's
-		   right edge bleeds") — width and height are much closer together
-		   than the desktop ellipse's wide, flat shape. */
+		/* The desktop ellipse is shaped to a text block that sits in the
+		   left half of a wide header. A narrow column has no such gap, so the
+		   veil becomes a straight bottom wash: solid under the copy, fading
+		   out well before the top of the field. */
 		.hero-veil {
-			background:
-				linear-gradient(to top, var(--veil) 0%, transparent 30%),
-				radial-gradient(
-					ellipse 30rem 26rem at 30% 72%,
-					var(--veil) 0%,
-					var(--veil) 72%,
-					transparent 96%
-				);
+			background: linear-gradient(to top, var(--veil) 0%, var(--veil) 66%, transparent 90%);
 		}
 		.hero-text {
 			padding: 0 18px 24px;
