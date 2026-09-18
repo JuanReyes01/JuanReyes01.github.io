@@ -172,8 +172,20 @@
 		right: 4%;
 		bottom: 6%;
 		max-width: 56%;
-		opacity: 0.6;
 		pointer-events: none;
+		padding: 12px 22px;
+		border-radius: 8px;
+		/* Coordinator correction (site/v2-direction slice S3, apply-fix
+		   round 1): "keep the figlet as crisp TEXT sitting on top of the
+		   field... with enough contrast (a veil or a text shadow)" — full
+		   opacity text over a veil panel, not a faded watermark blended
+		   into the field. */
+		background: radial-gradient(
+			ellipse at center,
+			var(--veil) 0%,
+			var(--veil) 55%,
+			transparent 100%
+		);
 	}
 	.hero-figlet :global(.fig) {
 		text-align: right;
