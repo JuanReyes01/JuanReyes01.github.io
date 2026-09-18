@@ -108,3 +108,48 @@ export function stepWave1D(
 	}
 	return { next, prev: current };
 }
+
+/** A jump of this many rows or more between adjacent columns reads as
+ * "near-vertical" (coordinator: "with `|` only for near-vertical") instead
+ * of a stretched diagonal. */
+const NEAR_VERTICAL_ROWS = 3;
+
+/**
+ * Chooses the glyph (or `null` to skip) for a single grid cell — column
+ * `x`'s row `y` — when tracing a continuous line from `prevRow` (the
+ * previous column's row) to `row` (this column's row). Coordinator
+ * correction: "the waveform reads as a dashed staircase, not a wave. It
+ * needs a continuous stroke... make sure consecutive cells join visually
+ * instead of leaving gaps." Filling EVERY row in `[min(row,prevRow),
+ * max(row,prevRow)]` at this column — a classic ASCII line-plot technique —
+ * is what makes that happen: the previous column's glyph and this one
+ * visually touch, instead of a single point-sampled glyph per column
+ * leaving a gap whenever the wave moves more than one row between columns.
+ *
+ * Pure and DOM-free on purpose (design D1) — `engines/waveform.ts` is the
+ * only caller, but the actual "does this look like a connected line"
+ * decision is plain row arithmetic, easy to unit-test without a canvas.
+ */
+export function traceGlyph(
+	row: number,
+	prevRow: number,
+	y: number,
+	rows: number
+): '/' | '\\' | '|' | '-' | '_' | '‾' | null {
+	const lo = Math.min(row, prevRow);
+	const hi = Math.max(row, prevRow);
+	if (y < lo || y > hi) return null;
+
+	if (row === prevRow) {
+		// A flat run: pick the glyph by the row's OWN position (not just a
+		// plain "-" everywhere) so a crest/trough still reads as the top/
+		// bottom of a wave, not a flat line running through it.
+		if (row === 0) return '‾';
+		if (row === rows - 1) return '_';
+		return '-';
+	}
+	if (hi - lo >= NEAR_VERTICAL_ROWS) return '|';
+	// Row 0 is the TOP (height +1), so a decreasing row number means the
+	// wave is RISING between these two columns.
+	return row < prevRow ? '/' : '\\';
+}

@@ -155,4 +155,33 @@ describe('WaveformEngine', () => {
 		expect(() => engine.resize()).not.toThrow();
 		expect(() => engine.draw(0)).not.toThrow();
 	});
+
+	// Coordinator correction round 2: "the waveform reads as a dashed
+	// staircase, not a wave... make sure consecutive cells join visually
+	// instead of leaving gaps." A genuinely connected multi-row trace draws
+	// MORE glyphs than there are columns (some columns get 2+ stacked
+	// glyphs filling a jump between rows) — a one-glyph-per-column
+	// "staircase" trace never exceeds `cols` total glyphs.
+	it('draws more glyphs than columns — proof that jumps get filled in, not left as single-point dashes', () => {
+		const { engine, drawn } = makeEngine(false, 1200, 80);
+		engine.draw(0);
+		const totalGlyphs = drawn.reduce(
+			(sum, d) => sum + [...d.text].filter((c) => c !== ' ').length,
+			0
+		);
+		const approxCols = Math.ceil(1200 / 7); // matches the fake ctx's measureText width:7
+		expect(totalGlyphs).toBeGreaterThan(approxCols);
+	});
+
+	it('uses most of the strip height for the default signature — the trace reaches near the top or bottom somewhere', () => {
+		const { engine, drawn } = makeEngine(true, 1200, 80);
+		engine.draw(0);
+		const allChars = drawn.map((d) => d.text).join('');
+		// '‾' and '_' only ever appear at the very top/bottom row
+		// (traceGlyph), so finding either proves the default signature's
+		// displayed amplitude actually reaches an extreme, not just the
+		// strip's middle rows.
+		const reachesExtreme = allChars.includes('‾') || allChars.includes('_');
+		expect(reachesExtreme).toBe(true);
+	});
 });
