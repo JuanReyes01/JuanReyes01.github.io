@@ -34,6 +34,14 @@ export function createWaveformAction(
 ): (node: HTMLCanvasElement, params: WaveformActionParams) => WaveformActionHandle {
 	return (node, initialParams) => {
 		let engine: WaveformEngine | null = null;
+		// The engine is only built once `loadFonts()` resolves — a real font
+		// fetch in a browser. `/work/[slug]/` sets its build's own signature
+		// and palette synchronously on mount, well before that, so those calls
+		// are held here and replayed into the engine the moment it exists.
+		// Without this every case study drew the DEFAULT waveform in the
+		// DEFAULT colours, and the per-build identity never reached the page.
+		let pendingSignature: WaveSignature | null = null;
+		let pendingPair: PaletteTokenPair | null = null;
 		const attach = createCanvasAction(deps, (canvas, params: WaveformActionParams, env) => {
 			engine = new WaveformEngine({
 				canvas,
@@ -41,6 +49,10 @@ export function createWaveformAction(
 				reduced: env.reduced,
 				section: params.section
 			});
+			if (pendingSignature) engine.setSignature(pendingSignature);
+			if (pendingPair) engine.setPalette(pendingPair);
+			pendingSignature = null;
+			pendingPair = null;
 			return engine;
 		});
 		const handle = attach(node, initialParams);
@@ -58,15 +70,19 @@ export function createWaveformAction(
 
 		return {
 			setSignature(signature) {
-				engine?.setSignature(signature);
+				if (engine) engine.setSignature(signature);
+				else pendingSignature = signature;
 			},
 			resetSignature() {
+				pendingSignature = null;
 				engine?.resetSignature();
 			},
 			setPalette(pair) {
-				engine?.setPalette(pair);
+				if (engine) engine.setPalette(pair);
+				else pendingPair = pair;
 			},
 			resetPalette() {
+				pendingPair = null;
 				engine?.resetPalette();
 			},
 			destroy() {
