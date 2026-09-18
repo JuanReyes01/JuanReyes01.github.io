@@ -100,13 +100,23 @@ describe('BandEngine (character field)', () => {
 		expect(fillTextCallCount()).toBeLessThan(600);
 	});
 
-	it('traces field edges with directional glyphs and keeps flat interiors on the density ramp', () => {
-		const { engine, drawn } = makeEngine(false, 1280, 260);
+	// Owner correction (site/v2-direction slice S3, apply-fix round 1):
+	// "ambient fields use the density ramp only" — the iridescent field is
+	// procedural noise with no real shape to trace, so it must never
+	// produce a directional edge glyph, only density-ramp characters. Uses
+	// a very wide canvas so the (centered) bird cannot possibly reach the
+	// leftmost columns — slicing just those columns from every drawn row
+	// gives a clean field-only sample without needing to distinguish bird
+	// vs. field by color (several bird parts share the field's own solid
+	// hex ink colors, e.g. green).
+	it('never traces a directional edge glyph in the ambient field — density ramp only (bird excluded via a far-left column slice)', () => {
+		const { engine, drawn } = makeEngine(false, 4000, 260);
 		engine.draw(0);
-		const allChars = drawn.map((d) => d.text).join('');
-		const edgeGlyphs = [...allChars].filter((c) => '|/\\'.includes(c));
-		const densityGlyphs = [...allChars].filter((c) => '.·:=+*#%@'.includes(c));
-		expect(edgeGlyphs.length).toBeGreaterThan(0);
+		const FAR_LEFT_COLS = 80;
+		const fieldChars = drawn.map((d) => d.text.slice(0, FAR_LEFT_COLS)).join('');
+		const edgeGlyphs = [...fieldChars].filter((c) => '|/\\'.includes(c));
+		const densityGlyphs = [...fieldChars].filter((c) => '.·:=+*#%@'.includes(c));
+		expect(edgeGlyphs.length).toBe(0);
 		expect(densityGlyphs.length).toBeGreaterThan(0);
 	});
 
@@ -157,25 +167,42 @@ describe('computeBirdAnchor (physical pixels, not grid cells)', () => {
 		expect(big.ay).toBeCloseTo(small.ay * 2);
 	});
 
-	it('keeps the whole hummingbird (including the flower) inside the band at a realistic desktop size', () => {
-		const width = 1280;
-		const height = 258;
-		const { S, ax, ay } = computeBirdAnchor(width, height);
-		// sampleBird's own bounding box (fields/bird.ts): x in [-1.45, 0.88], y in [-0.9, 1.02].
-		expect(ax + -1.45 * S).toBeGreaterThan(0);
-		expect(ax + 0.88 * S).toBeLessThan(width);
-		expect(ay + -0.9 * S).toBeGreaterThan(0);
-		expect(ay + 1.02 * S).toBeLessThan(height);
+	// Owner correction (site/v2-direction slice S3, apply-fix round 1):
+	// "the bird is the star of /field/ and it is far too small... make it
+	// dominate that header." At a wide/short header aspect ratio, a bird
+	// this size legitimately bleeds past the top/bottom edge (like a photo
+	// crop) — these tests check that it's centered and meaningfully bigger
+	// than before, and that the CORE recognizable silhouette (body, head,
+	// wing, gorget — not the outermost flower-stem tip) stays visible,
+	// rather than requiring the entire bbox (flower included) to fit with
+	// zero clipping, which is what made it small in the first place.
+	it('is roughly 2-3x the size of the original 0.45-coefficient scale', () => {
+		const ORIGINAL_COEFFICIENT = 0.45;
+		const { S } = computeBirdAnchor(1280, 300);
+		expect(S).toBeGreaterThan(300 * ORIGINAL_COEFFICIENT * 1.2);
 	});
 
-	it('keeps the bird comfortably inside the band at a narrow (mobile) size too', () => {
-		const width = 400;
-		const height = 160;
+	it('centers the bird bounding box (flower included) in the frame, not off to one side', () => {
+		const width = 1280;
+		const height = 300;
 		const { S, ax, ay } = computeBirdAnchor(width, height);
-		expect(ax + -1.45 * S).toBeGreaterThan(0);
-		expect(ax + 0.88 * S).toBeLessThan(width);
-		expect(ay + -0.9 * S).toBeGreaterThan(0);
-		expect(ay + 1.02 * S).toBeLessThan(height);
+		// bbox midpoint (fields/bird.ts bounds: x in [-1.45,0.88], y in [-0.9,1.02]).
+		const bboxMidX = ax + ((0.88 + -1.45) / 2) * S;
+		const bboxMidY = ay + ((1.02 + -0.9) / 2) * S;
+		expect(bboxMidX).toBeCloseTo(width / 2, 0);
+		expect(bboxMidY).toBeCloseTo(height / 2, 0);
+	});
+
+	it('keeps the recognizable core (body/head/wing/gorget, not the flower-stem tip) inside the frame at a realistic desktop size', () => {
+		const width = 1280;
+		const height = 300;
+		const { S, ax, ay } = computeBirdAnchor(width, height);
+		// A tighter box than the full bbox — body+head+wing+gorget+beak,
+		// excludes the flower/stem's own outer reach (x < -1.0).
+		expect(ax + -0.75 * S).toBeGreaterThan(-width * 0.05);
+		expect(ax + 0.88 * S).toBeLessThan(width * 1.05);
+		expect(ay + -0.55 * S).toBeGreaterThan(-height * 0.05);
+		expect(ay + 0.75 * S).toBeLessThan(height * 1.05);
 	});
 });
 
