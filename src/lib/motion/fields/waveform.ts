@@ -9,6 +9,15 @@
  * simulation are all plain math here; only `engines/waveform.ts` touches a
  * canvas.
  */
+import { clamp, clamp01 } from './math';
+
+/** A signature's own raw amplitude (0.5-0.85) rarely reaches the strip's
+ * full +-1 row range on its own; this boosts the displayed height so even
+ * the calmest signature visibly travels most of the strip, not just its
+ * middle third. Shared by the live `WaveformEngine` and the build-time
+ * {@link staticWaveformRows} so a case study's zero-JS header reads at the
+ * same visual scale as `/work/`'s own live one. */
+export const DISPLAY_GAIN = 1.35;
 
 /** The 3 dimensions a build's own waveform signature can vary along. */
 export interface WaveSignature {
@@ -42,12 +51,17 @@ export function hashString(s: string): number {
  * changing) into a deterministic {@link WaveSignature}. Three independent
  * byte-ranges of the same hash feed the three dimensions, so changing any
  * part of the seed text plausibly changes all three, not just one.
+ *
+ * Ranges ported verbatim from the owner-approved header prototype: "ranges
+ * start well above zero — every build has to read as a wave, not as a flat
+ * line that happened to draw a bad hash." Floors: amplitude >= 0.5,
+ * frequency >= 1.8, at least 2 harmonics.
  */
 export function deriveWaveSignature(seedText: string): WaveSignature {
 	const h = hashString(seedText);
-	const amplitude = 0.28 + ((h & 0xff) / 255) * 0.5; // 0.28 - 0.78
-	const frequency = 1 + (((h >>> 8) & 0xff) / 255) * 3; // 1 - 4
-	const waveCount = 1 + (((h >>> 16) & 0xff) % 4); // 1 - 4 (integer)
+	const amplitude = 0.5 + ((h & 0xff) / 255) * 0.35; // 0.5 - 0.85
+	const frequency = 1.8 + (((h >>> 8) & 0xff) / 255) * 2.4; // 1.8 - 4.2
+	const waveCount = 2 + (((h >>> 16) & 0xff) % 3); // 2 - 4 (integer)
 	return { amplitude, frequency, waveCount };
 }
 
@@ -70,6 +84,16 @@ export function sampleWaveform(x: number, sig: WaveSignature, t: number): number
 	return (sum / norm) * sig.amplitude;
 }
 
+/** Caps a raw pointer-speed strength into the small amount of wave energy a
+ * poke should actually add — ported verbatim from the owner-approved header
+ * prototype's own `WaveHeader.poke()`: "a dent in the line, not a spike
+ * that slams it into the frame." Below the cap it scales linearly; above it
+ * (a fast drag or a hard pointerdown) it flattens out at 0.55 instead of
+ * growing unbounded. */
+export function waveformPokeAmount(strength: number): number {
+	return Math.min(0.55, strength * 0.06);
+}
+
 /**
  * Adds wave energy at `index` and its 2 neighbors (full strength at the
  * center, half strength around it), skipping the buffer's 1px border — the
@@ -89,22 +113,34 @@ export function pokeWave1D(
 	}
 }
 
+/** Below this magnitude a step snaps straight to zero (prototype: "the snap
+ * to zero below a threshold is what makes it actually stop instead of
+ * ringing on" forever) — an ever-shrinking float never quite reaches 0 on
+ * its own, so `isSettled()`-style checks downstream would never see a truly
+ * flat wave without this. */
+const SETTLE_THRESHOLD = 0.004;
+
 /**
  * Advances the 1D damped-wave simulation by one step — the 1D analog of
- * `fields/ripple.ts`'s `stepRipple` (same discrete wave equation, same
- * default damping), computed into a fresh buffer rather than mutating
- * `previous` in place.
+ * `fields/ripple.ts`'s `stepRipple` (same discrete wave equation), computed
+ * into a fresh buffer rather than mutating `previous` in place.
+ *
+ * Damping ported verbatim from the owner-approved header prototype: "this
+ * scheme decays by sqrt(damping) per step, not by damping, so 0.74 is what
+ * gives ~0.86/step — a poke is gone in about a second," faster than the
+ * slower 2D ripple's own 0.94.
  */
 export function stepWave1D(
 	size: number,
 	current: Float32Array,
 	previous: Float32Array,
-	damping = 0.94
+	damping = 0.74
 ): { next: Float32Array; prev: Float32Array } {
 	const next = new Float32Array(size);
 	for (let i = 1; i < size - 1; i++) {
 		const neighborAvg = (current[i - 1] + current[i + 1]) * 0.5;
-		next[i] = (neighborAvg - previous[i]) * damping;
+		const v = (neighborAvg - previous[i]) * damping;
+		next[i] = Math.abs(v) < SETTLE_THRESHOLD ? 0 : v;
 	}
 	return { next, prev: current };
 }
@@ -152,4 +188,38 @@ export function traceGlyph(
 	// Row 0 is the TOP (height +1), so a decreasing row number means the
 	// wave is RISING between these two columns.
 	return row < prevRow ? '/' : '\\';
+}
+
+/** An arbitrary fixed instant for the static build (design: matches the
+ * spirit of every other engine's fixed reduced-motion seed — a calm, static
+ * pose, not "the start" of anything). */
+const STATIC_WAVE_T = 1.2;
+
+/**
+ * A `rows`-by-`cols` static ASCII trace of `seedText`'s own
+ * {@link deriveWaveSignature}, sampled once at a fixed instant — the
+ * zero-JS `/work/[slug]/` counterpart to `WaveformEngine`'s live canvas, so
+ * a case study's own build-time header reads as ITS waveform rather than
+ * the generic ambient field every other static header uses. Pure and
+ * deterministic (design D1): same `cols`/`rows`/`seedText` always produces
+ * the exact same rows.
+ */
+export function staticWaveformRows(cols: number, rows: number, seedText: string): string[] {
+	const signature = deriveWaveSignature(seedText);
+	const grid: string[][] = Array.from({ length: rows }, () => new Array(cols).fill(' '));
+
+	let prevRow = 0;
+	for (let x = 0; x < cols; x++) {
+		const xn = cols > 1 ? x / (cols - 1) : 0;
+		const height = clamp(sampleWaveform(xn, signature, STATIC_WAVE_T) * DISPLAY_GAIN, -1, 1);
+		const row = Math.round(clamp01((1 - height) / 2) * (rows - 1));
+		const from = x === 0 ? row : prevRow;
+		for (let y = 0; y < rows; y++) {
+			const glyph = traceGlyph(row, from, y, rows);
+			if (glyph) grid[y][x] = glyph;
+		}
+		prevRow = row;
+	}
+
+	return grid.map((line) => line.join(''));
 }

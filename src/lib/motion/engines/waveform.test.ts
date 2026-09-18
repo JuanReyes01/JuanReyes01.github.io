@@ -184,4 +184,40 @@ describe('WaveformEngine', () => {
 		const reachesExtreme = allChars.includes('‾') || allChars.includes('_');
 		expect(reachesExtreme).toBe(true);
 	});
+
+	// Approved header prototype port: the waveform now fills the WHOLE
+	// header banner (previously a fixed 7-row strip below it), so its own
+	// row count must track the real canvas height instead of a constant —
+	// otherwise a tall header only ever fills its top ~100px and leaves the
+	// rest of the banner blank.
+	it('draws more rows on a taller canvas — the trace fills the real header height, not a fixed strip', () => {
+		const short = makeEngine(true, 1200, 60);
+		short.engine.draw(0);
+
+		const tall = makeEngine(true, 1200, 240);
+		tall.engine.draw(0);
+
+		// `fillText` is called once per (row, color) pair (see
+		// `drawCharGrid`) and the trace is a single color throughout, so the
+		// call count IS the number of distinct rows that drew a glyph — a
+		// genuinely dynamic row count draws into more rows on a taller
+		// canvas instead of always filling the same fixed strip height.
+		expect(tall.fillTextCallCount()).toBeGreaterThan(short.fillTextCallCount());
+	});
+
+	// Prototype: "a dent in the line, not a spike that slams it into the
+	// frame" — the engine softens `poke()`'s own strength via the pure
+	// `waveformPokeAmount` helper (see `fields/waveform.test.ts` for the
+	// softening curve itself) before adding it to the buffer, instead of
+	// pushing raw pointer-speed values straight in.
+	it('poke() never adds more than waveformPokeAmount’s own cap, even for an extreme strength', () => {
+		const { engine, drawn } = makeEngine(false, 1200, 80);
+		engine.poke(600, 500); // an extreme strength value
+		expect(() => engine.draw(0)).not.toThrow();
+		// A capped poke still leaves most of the strip's normal slope intact
+		// around the dent — an uncapped raw 500 would blow the buffer far
+		// past +-1 and clip the whole strip flat for many columns.
+		const allChars = drawn.map((d) => d.text).join('');
+		expect(allChars.includes('/') || allChars.includes('\\')).toBe(true);
+	});
 });
