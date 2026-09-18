@@ -70,6 +70,34 @@ describe('BandEngine (character field)', () => {
 		expect(engine.isSettled()).toBe(false);
 	});
 
+	it('poke() displaces the field at the SAME instant (owner decision: every header gets a pointer/touch ripple)', () => {
+		// Two engines, same `now` (0) — the only difference is one is poked
+		// before its draw. Isolates poke's displacement from ambient drift.
+		const { engine: unpoked, drawn: drawnA } = makeEngine(false, 1280, 260);
+		unpoked.draw(0);
+		const before = drawnA.map((d) => d.text + '|' + d.color).join('~');
+
+		const { engine: poked, drawn: drawnB } = makeEngine(false, 1280, 260);
+		// A large poke, far from the (now much bigger, centered) bird, so the
+		// displacement shows up as a real density-ramp rounding change
+		// somewhere rather than landing on a cell the bird already owns.
+		expect(() => poked.poke(60, 30, 40)).not.toThrow();
+		poked.draw(0);
+		const after = drawnB.map((d) => d.text + '|' + d.color).join('~');
+
+		expect(after).not.toBe(before);
+	});
+
+	it('poke() is a no-op under reduced motion (static frame stays static)', () => {
+		const { engine, drawn } = makeEngine(true, 1280, 260);
+		engine.draw(0);
+		const before = drawn.map((d) => d.text).join('~');
+		drawn.length = 0;
+		engine.poke(400, 120, 8);
+		engine.draw(0);
+		expect(drawn.map((d) => d.text).join('~')).toBe(before);
+	});
+
 	it('is always settled under reduced motion (one static frame)', () => {
 		const { engine } = makeEngine(true);
 		expect(engine.isSettled()).toBe(true);
