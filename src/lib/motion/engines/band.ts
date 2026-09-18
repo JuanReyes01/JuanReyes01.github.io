@@ -1,71 +1,101 @@
 /**
  * The field page's iridescent band engine (owner's explicit PR4 choice — a
- * tall "protagonist" Bayer-dithered band; design motion table "Band
- * /field"). Downscales to a small pixel buffer (one canvas pixel per dither
- * cell, matching the legacy pane-header `Strip` class's approach) so the
- * ordered dither reads as discrete dots once the browser scales the canvas
- * up to its CSS size. Runs as a slow ambient loop while visible; reduced
- * motion renders one static frame.
+ * tall "protagonist" band; design motion table "Band /field"). Owner verdict
+ * `site/v2-direction` slice S3 ("the hummingbird looks wrong"): this used to
+ * write raw `ImageData` pixels — a dither of coloured dots, never actual
+ * characters — so the bird composited into it rendered as coloured blobs,
+ * not ASCII. It now renders as a real monospace CHARACTER grid, exactly like
+ * `SkyEngine` (same `layoutCharGrid`/`drawCharGrid` shared renderer), so the
+ * band itself and the hummingbird are BOTH drawn with characters.
  *
- * Also draws the hummingbird (design #4938 slice S2: the bird moves from the
- * hero to `/field/`, where its research actually happens — it belongs over
- * the band, not the home sky). It's composited directly into this grid, in
- * the same draw pass, rather than a second canvas/scheduler slot — the band
- * stays the protagonist and the bird is a small, calm, hovering silhouette
- * over it, reusing the exact same pure geometry/motion (`fields/bird.ts`)
- * and palette (`sky-palette.ts`) the home hero used, just recomposited here.
+ * The band's own texture keeps the exact same field maths as before
+ * (`iridescentField` + the ordered Bayer dither from `dither.ts` decides
+ * which cells are "lit" at all) — only WHAT gets drawn into a lit cell
+ * changed: a glyph chosen by `pickGlyph` (directional edge glyph at a field
+ * boundary, density-ramp character in a flat interior) instead of a flat
+ * colored pixel.
+ *
+ * The hummingbird (design #4938 slice S2: the bird moves from the hero to
+ * `/field/`) is composited into the SAME grid, in the same draw pass, reusing
+ * the exact pure geometry/motion (`fields/bird.ts`) and palette
+ * (`sky-palette.ts`) the home hero used. Its edges are traced with the same
+ * directional-glyph technique (owner decision #4938 item 6: "the theme is
+ * ASCII ART, but super advanced") instead of being forced to a solid pixel
+ * outline — the bird now reads as a hummingbird DRAWN WITH CHARACTERS, not a
+ * pixel silhouette.
  */
 import { makeTexture, sampleTexture } from '../fields/noise';
 import { iridescentField } from '../fields/iridescence';
-import { passesDither } from '../fields/dither';
-import { blendOverRgba } from '../fields/math';
-import { sampleGradient } from '../fields/glyphs';
+import { clamp01 } from '../fields/math';
+import { pickGlyph, DENSITY_RAMP } from '../fields/glyphs';
 import { birdGeometryScale, computeBirdMotion, sampleBird, type BirdFrame } from '../fields/bird';
 import { resolveSkyColor, type SkyColorKey } from './sky-palette';
-import { hexToRgb, parseCssColor, type Tokens } from '../runtime/tokens';
+import type { Tokens } from '../runtime/tokens';
+import {
+	drawCharGrid,
+	layoutCharGrid,
+	devicePixelRatioCapped,
+	MONO_FONT_NAME
+} from '../runtime/char-grid';
 import type { Engine } from '../runtime/canvas-action';
 
 /**
- * Where the hummingbird hovers, in the band's own dither-cell grid (one cell
- * = one bitmap pixel = one bird-space "unit-per-`S`"). Proportional to
- * `cols`/`rows`, not fixed pixels, so it stays a comfortably-sized,
- * comfortably-clear-of-the-edges silhouette at any band size. Sized and
+ * A bird anchor in REAL PHYSICAL PIXELS (CSS px), not grid cells — unlike a
+ * pixel-dither raster (one canvas pixel == one physical px, always square),
+ * a monospace character cell is NOT square (`cw` != `ch`), so sampling the
+ * bird directly in cell-index space would stretch its silhouette by the
+ * font's own aspect ratio. Anchoring in physical pixels and converting each
+ * cell to its physical center before sampling (see `draw()`) keeps the bird
+ * round on screen regardless of font metrics. Proportional to the band's own
+ * size, not a fixed pixel size, so it stays a comfortably-sized,
+ * comfortably-clear-of-the-edges silhouette at any band size — sized and
  * balanced against `sampleBird`'s own documented bounding box (`fields/bird.ts`:
- * x in [-1.45, 0.88], y in [-0.9, 1.02], which includes the flower) rather
- * than just the body, so nothing — flower included — clips off the band's
- * edges (see the unit tests in `band.test.ts`).
+ * x in [-1.45, 0.88], y in [-0.9, 1.02], which includes the flower), verified
+ * in `band.test.ts`.
  */
 export function computeBirdAnchor(
-	cols: number,
-	rows: number
+	widthPx: number,
+	heightPx: number
 ): { S: number; ax: number; ay: number } {
-	const S = rows * 0.45;
-	return { S, ax: cols * 0.62, ay: rows * 0.473 };
+	const S = heightPx * 0.45;
+	return { S, ax: widthPx * 0.62, ay: heightPx * 0.473 };
+}
+
+/** Converts a physical pixel position into the hummingbird's own normalized
+ * bird-space coordinates (see `fields/bird.ts`) relative to `anchor` — one
+ * `anchor.S` of physical distance on EITHER axis is exactly one bird-space
+ * unit, which is what keeps the bird circular in real pixels no matter the
+ * font's cell aspect ratio (see {@link computeBirdAnchor}'s doc comment). */
+export function birdSpaceOf(
+	px: number,
+	py: number,
+	anchor: { S: number; ax: number; ay: number }
+): { bx: number; by: number } {
+	return { bx: (px - anchor.ax) / anchor.S, by: (py - anchor.ay) / anchor.S };
 }
 
 /**
  * Minimum cell-space gradient magnitude of the bird's own ramp-value field
  * (0 outside the bird, the part's ramp value inside — see `draw()`'s
- * `birdField`) to treat a cell as sitting right on the bird's silhouette
- * boundary (owner decision #4938 item 6: "the theme is ASCII ART, but super
- * advanced" — shapes should read as drawn, not a blob). The band is a raw
- * pixel/dither raster (one canvas pixel per dither cell — see the file doc
- * above), too fine-grained for legible text glyphs, so here the same
- * gradient technique the directional-glyph engine uses
- * (`fields/glyphs.ts#sampleGradient`) forces the boundary fully opaque — a
- * crisp outline stroke — instead of literal glyph characters. Tuned against
- * a real bird frame (see `band.test.ts`): comfortably above the internal
- * ramp gradients inside a single soft-edged part, comfortably below would
- * turn the whole translucent wing solid.
+ * `birdField`) to trace a directional edge glyph (`- | / \`) instead of the
+ * density-ramp character (owner decision #4938 item 6: "the theme is ASCII
+ * ART, but super advanced" — shapes should read as drawn, not a blob).
+ * Tuned against real headless-browser screenshots of the band at common
+ * widths, the same way `SkyEngine`'s `EDGE_THRESHOLD` was tuned.
  */
-const BIRD_EDGE_THRESHOLD = 0.3;
+const BIRD_EDGE_THRESHOLD = 0.55;
 
-/** Below this viewport width the dither cell shrinks from 3px to 2px (design motion table). */
+/** Same idea as {@link BIRD_EDGE_THRESHOLD}, tuned for the ambient
+ * iridescent field's own (much smoother) gradient instead of the bird's. */
+const FIELD_EDGE_THRESHOLD = 0.12;
+
+/** Below this viewport width the font shrinks for a denser character grid
+ * (design motion table's dither-cell breakpoint, carried over to font size). */
 const NARROW_BREAKPOINT_PX = 760;
-const DESKTOP_CELL_PX = 3;
-const NARROW_CELL_PX = 2;
-const MIN_COLS = 16;
-const MIN_ROWS = 8;
+const DESKTOP_FONT_PX = 9;
+const NARROW_FONT_PX = 7;
+const MIN_COLS = 24;
+const MIN_ROWS = 10;
 /** Alternating-row scanline dimming (design: "Scanline 0.7"), matching the legacy strip draw loop. */
 const SCANLINE_DIM = 0.7;
 
@@ -86,9 +116,13 @@ export class BandEngine implements Engine {
 	/** A fixed ambient phase offset so every band instance doesn't drift in lockstep. */
 	private readonly seedT = 4.2;
 
+	private width = 0;
+	private height = 0;
+	private cw = 6;
+	private ch = 11;
 	private cols = 0;
 	private rows = 0;
-	private image: ImageData | null = null;
+	private fontPx = DESKTOP_FONT_PX;
 	private bird = { S: 0, ax: 0, ay: 0 };
 
 	constructor(opts: BandEngineOptions) {
@@ -120,91 +154,91 @@ export class BandEngine implements Engine {
 	resize(): void {
 		const rect = this.canvas.getBoundingClientRect();
 		if (!rect.width) return;
-		const cellPx = rect.width <= NARROW_BREAKPOINT_PX ? NARROW_CELL_PX : DESKTOP_CELL_PX;
-		const cols = Math.max(MIN_COLS, Math.floor(rect.width / cellPx));
-		const rows = Math.max(MIN_ROWS, Math.floor(rect.height / cellPx));
-		if (cols === this.cols && rows === this.rows) return;
-		this.cols = cols;
-		this.rows = rows;
-		this.canvas.width = cols;
-		this.canvas.height = rows;
-		this.image = this.ctx.createImageData(cols, rows);
-		this.bird = computeBirdAnchor(cols, rows);
+		this.fontPx = rect.width <= NARROW_BREAKPOINT_PX ? NARROW_FONT_PX : DESKTOP_FONT_PX;
+		const layout = layoutCharGrid({
+			canvas: this.canvas,
+			ctx: this.ctx,
+			dpr: devicePixelRatioCapped(),
+			fontPx: this.fontPx,
+			fontFamily: MONO_FONT_NAME,
+			minCols: MIN_COLS,
+			minRows: MIN_ROWS
+		});
+		if (!layout) return;
+		this.width = layout.width;
+		this.height = layout.height;
+		this.cw = layout.cw;
+		this.ch = layout.ch;
+		this.cols = layout.cols;
+		this.rows = layout.rows;
+		this.bird = computeBirdAnchor(this.width, this.height);
 	}
 
 	draw(now: number): void {
-		if (!this.image) return;
+		if (!this.cols || !this.rows) return;
 		const t = this.reduced ? this.seedT : this.seedT + now / 1000;
-		const data = this.image.data;
+		const ctx = this.ctx;
+		ctx.clearRect(0, 0, this.width, this.height);
+		ctx.textBaseline = 'top';
+
 		const samplePrimary = (x: number, y: number) => sampleTexture(this.texturePrimary, x, y);
 		const sampleShimmer = (x: number, y: number) => sampleTexture(this.textureShimmer, x, y);
+		const fieldValueAt = (cx: number, cy: number): number =>
+			iridescentField(samplePrimary, sampleShimmer, cx, cy, t).value;
 
 		// Same pure motion as the home hero used (owner rule: "same calm
 		// settings" — 1.1 wingbeats/s, gentle hover/sway), just recomposited
-		// here. `birdGeometryScale`'s cell size is `1` (not a CSS px) because
-		// this grid's own cell IS the unit — one bitmap pixel per dither cell.
+		// here, now scaled from REAL physical cell/bird pixel sizes.
 		const frame: BirdFrame = {
 			...computeBirdMotion(t, this.reduced),
-			...birdGeometryScale(1, 1, this.bird.S)
+			...birdGeometryScale(this.ch, this.cw, this.bird.S)
 		};
 		const shimmer = Math.floor(t * 1.5);
 
-		// The bird's own ramp-value field in cell space (0 outside the bird
-		// entirely — including over its own `eye` hole — the part's ramp
-		// value inside), reused for edge detection below via the exact same
-		// gradient math the directional-glyph engine uses.
+		// The bird's own ramp-value field, sampled at a cell's PHYSICAL
+		// center (not raw cell index — see `birdSpaceOf`'s doc comment) so
+		// its silhouette stays round regardless of the font's cell aspect
+		// ratio. `0` outside the bird entirely (including over its own `eye`
+		// hole), the part's ramp value inside.
 		const birdField = (cx: number, cy: number): number => {
-			const bx = (cx + 0.5 - this.bird.ax) / this.bird.S;
-			const by = (cy + 0.5 - this.bird.ay) / this.bird.S;
+			const { bx, by } = birdSpaceOf((cx + 0.5) * this.cw, (cy + 0.5) * this.ch, this.bird);
 			const sample = sampleBird(bx, by, frame);
 			return sample && sample.key !== 'eye' ? sample.value : 0;
 		};
 
-		for (let y = 0; y < this.rows; y++) {
-			const scanline = y % 2 === 1 ? SCANLINE_DIM : 1;
-			const birdY = (y + 0.5 - this.bird.ay) / this.bird.S;
-			for (let x = 0; x < this.cols; x++) {
-				const { value, ink } = iridescentField(samplePrimary, sampleShimmer, x, y, t);
-				const i = (y * this.cols + x) * 4;
-				if (passesDither(value * scanline, x, y)) {
-					const [r, g, b] = hexToRgb(this.tokens[ink]);
-					data[i] = r;
-					data[i + 1] = g;
-					data[i + 2] = b;
-					data[i + 3] = 255;
-				} else {
-					data[i + 3] = 0;
-				}
-
-				const birdX = (x + 0.5 - this.bird.ax) / this.bird.S;
-				const bird = sampleBird(birdX, birdY, frame);
-				// `eye` is a hole in the head (never drawn — same as the sky
-				// engine's bird), so the band underneath shows through untouched.
-				if (!bird || bird.key === 'eye') continue;
-				const colorKey: SkyColorKey =
-					bird.key === 'gorget' && (x + y + shimmer) % 2 === 1 ? 'gorget2' : bird.key;
-				const top = parseCssColor(resolveSkyColor(colorKey, this.tokens));
-				// Owner decision #4938 item 6: right at the bird's own
-				// silhouette boundary, force full opacity — a crisp outline
-				// stroke — instead of letting a translucent part (wing,
-				// farwing, ghost) fade into whatever partial alpha the dither
-				// field underneath happened to leave. See `BIRD_EDGE_THRESHOLD`.
-				if (sampleGradient(birdField, x, y).magnitude >= BIRD_EDGE_THRESHOLD) {
-					top.a = 1;
-				}
-				const blended = blendOverRgba(top, {
-					r: data[i],
-					g: data[i + 1],
-					b: data[i + 2],
-					a: data[i + 3] / 255
+		drawCharGrid(ctx, this.cols, this.rows, this.ch, (x, y) => {
+			const { bx, by } = birdSpaceOf((x + 0.5) * this.cw, (y + 0.5) * this.ch, this.bird);
+			const bird = sampleBird(bx, by, frame);
+			// `eye` is a hole in the head (never drawn — same as the sky
+			// engine's bird), so the band underneath shows through untouched.
+			if (bird && bird.key !== 'eye') {
+				const glyph = pickGlyph(birdField, x, y, bird.value, {
+					edgeThreshold: BIRD_EDGE_THRESHOLD,
+					ramp: DENSITY_RAMP
 				});
-				data[i] = blended.r;
-				data[i + 1] = blended.g;
-				data[i + 2] = blended.b;
-				data[i + 3] = Math.round(blended.a * 255);
+				if (glyph !== ' ') {
+					const colorKey: SkyColorKey =
+						bird.key === 'gorget' && (x + y + shimmer) % 2 === 1 ? 'gorget2' : bird.key;
+					return { glyph, color: resolveSkyColor(colorKey, this.tokens) };
+				}
 			}
-		}
 
-		this.ctx.putImageData(this.image, 0, 0);
+			// Owner instruction (site/v2-direction slice S3, item A): "same
+			// iridescent field maths, now sampled to glyphs" — the scanline
+			// dimming and density now shape which DENSITY_RAMP character a
+			// cell gets (like `SkyEngine`'s cloud field), instead of gating
+			// whether the cell draws anything at all via the old ordered
+			// Bayer dither (`passesDither`) — that gate was tuned for a fine
+			// per-pixel raster and left the coarser character grid looking
+			// like sparse stars, not "a wide, dense character field."
+			const scanline = y % 2 === 1 ? SCANLINE_DIM : 1;
+			const { value, ink } = iridescentField(samplePrimary, sampleShimmer, x, y, t);
+			const glyph = pickGlyph(fieldValueAt, x, y, clamp01(value * scanline), {
+				edgeThreshold: FIELD_EDGE_THRESHOLD,
+				ramp: DENSITY_RAMP
+			});
+			if (glyph === ' ') return null;
+			return { glyph, color: this.tokens[ink] };
+		});
 	}
 }

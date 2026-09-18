@@ -1,6 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { BandEngine, computeBirdAnchor } from './band';
-import { hexToRgb } from '../runtime/tokens';
+import { BandEngine, computeBirdAnchor, birdSpaceOf } from './band';
 import type { Engine } from '../runtime/canvas-action';
 import type { Tokens } from '../runtime/tokens';
 
@@ -19,54 +18,51 @@ const TOKENS: Tokens = {
 	pink: '#f25477'
 };
 
-function fakeCanvas(width = 900, height = 140) {
-	let putCount = 0;
-	let lastImage: ImageData | null = null;
+function rect(overrides: Partial<{ width: number; height: number }> = {}) {
+	return { top: 0, left: 0, width: 0, height: 0, ...overrides };
+}
+
+/** Same convention as `sky.test.ts`'s fake canvas: `fillText` counts calls;
+ * `fillTextCapturing` also records the (text, color) pair drawn. */
+function fakeCanvas(width = 900, height = 258) {
+	const drawn: Array<{ text: string; color: string }> = [];
+	let fillTextCalls = 0;
 	const ctx = {
-		createImageData: (w: number, h: number) =>
-			({ data: new Uint8ClampedArray(w * h * 4), width: w, height: h }) as ImageData,
-		putImageData: (image: ImageData) => {
-			putCount++;
-			lastImage = image;
+		fillStyle: '',
+		font: '',
+		setTransform: () => {},
+		clearRect: () => {},
+		measureText: () => ({ width: 7 }),
+		fillText: (text: string) => {
+			fillTextCalls++;
+			drawn.push({ text, color: ctx.fillStyle as string });
 		}
 	};
 	const canvas = {
 		width: 0,
 		height: 0,
 		getContext: () => ctx,
-		getBoundingClientRect: () => ({ width, height, top: 0, left: 0, right: width, bottom: height })
+		getBoundingClientRect: () => rect({ width, height })
 	};
 	return {
 		canvas: canvas as unknown as HTMLCanvasElement,
-		putCount: () => putCount,
-		lastImage: () => lastImage
+		fillTextCallCount: () => fillTextCalls,
+		drawn
 	};
 }
 
-function makeEngine(reduced: boolean, width = 900, height = 140) {
-	const { canvas, putCount, lastImage } = fakeCanvas(width, height);
+function makeEngine(reduced: boolean, width = 900, height = 258) {
+	const { canvas, fillTextCallCount, drawn } = fakeCanvas(width, height);
 	const engine = new BandEngine({ canvas, tokens: TOKENS, reduced });
 	engine.resize();
-	return { engine, putCount, lastImage };
+	return { engine, fillTextCallCount, drawn };
 }
 
-describe('BandEngine', () => {
-	it('downscales to a 3px dither cell on desktop widths', () => {
-		const { engine, lastImage } = makeEngine(false, 900);
+describe('BandEngine (character field)', () => {
+	it('draws glyphs to the canvas without throwing', () => {
+		const { engine, fillTextCallCount } = makeEngine(false);
 		engine.draw(0);
-		expect(lastImage()?.width).toBe(Math.floor(900 / 3));
-	});
-
-	it('downscales to a 2px dither cell at or below the 760px breakpoint', () => {
-		const { engine, lastImage } = makeEngine(false, 600);
-		engine.draw(0);
-		expect(lastImage()?.width).toBe(Math.floor(600 / 2));
-	});
-
-	it('paints the dithered image without throwing', () => {
-		const { engine, putCount } = makeEngine(false);
-		engine.draw(0);
-		expect(putCount()).toBe(1);
+		expect(fillTextCallCount()).toBeGreaterThan(0);
 	});
 
 	it('never settles while ambient (visible, not reduced)', () => {
@@ -74,129 +70,125 @@ describe('BandEngine', () => {
 		expect(engine.isSettled()).toBe(false);
 	});
 
-	it('setVisibility() is a no-op — the shared scheduler already gates visibility (R1)', () => {
-		const { engine } = makeEngine(false);
-		expect(() => (engine as Engine).setVisibility(true, 0.6)).not.toThrow();
-		expect(engine.isSettled()).toBe(false); // unaffected either way
-	});
-
 	it('is always settled under reduced motion (one static frame)', () => {
 		const { engine } = makeEngine(true);
 		expect(engine.isSettled()).toBe(true);
 	});
 
+	it('setVisibility() is a no-op — the shared scheduler already gates visibility (R1)', () => {
+		const { engine } = makeEngine(false);
+		expect(() => (engine as Engine).setVisibility(true, 0.6)).not.toThrow();
+		expect(engine.isSettled()).toBe(false);
+	});
+
 	it('renders a deterministic frame under reduced motion regardless of `now`', () => {
-		const { engine: a, lastImage: imageA } = makeEngine(true);
+		const { engine: a, drawn: drawnA } = makeEngine(true);
 		a.draw(0);
-		const { engine: b, lastImage: imageB } = makeEngine(true);
+		const { engine: b, drawn: drawnB } = makeEngine(true);
 		b.draw(999999);
-		expect(Array.from(imageB()!.data)).toEqual(Array.from(imageA()!.data));
+		expect(drawnB.map((d) => d.text + '|' + d.color)).toEqual(
+			drawnA.map((d) => d.text + '|' + d.color)
+		);
 	});
 
-	it('lights only some pixels (ordered dither leaves gaps, not a solid fill)', () => {
-		const { engine, lastImage } = makeEngine(false);
+	it('batches draws per row and color key: fillText calls stay far below cell count (E4)', () => {
+		const { engine, fillTextCallCount } = makeEngine(false, 1280, 260);
 		engine.draw(0);
-		const data = lastImage()!.data;
-		let lit = 0;
-		let dark = 0;
-		for (let i = 3; i < data.length; i += 4) {
-			if (data[i] > 0) lit++;
-			else dark++;
-		}
-		expect(lit).toBeGreaterThan(0);
-		expect(dark).toBeGreaterThan(0);
+		// A dense character field still batches by (row, color) — bounded well
+		// under one call per cell.
+		expect(fillTextCallCount()).toBeGreaterThan(0);
+		expect(fillTextCallCount()).toBeLessThan(600);
 	});
 
-	// design #4938 slice S2: the hummingbird moves from the hero to `/field/`,
-	// drawn directly into the band's own grid so band + bird share one canvas.
-	describe('the hummingbird (design #4938 slice S2)', () => {
-		it('draws a gorget pixel — pink/magenta, colors the ambient iridescent field never produces (only green/cyan/blue inks) — proving the bird is actually composited in', () => {
-			const { engine, lastImage } = makeEngine(false, 900);
+	it('traces field edges with directional glyphs and keeps flat interiors on the density ramp', () => {
+		const { engine, drawn } = makeEngine(false, 1280, 260);
+		engine.draw(0);
+		const allChars = drawn.map((d) => d.text).join('');
+		const edgeGlyphs = [...allChars].filter((c) => '|/\\'.includes(c));
+		const densityGlyphs = [...allChars].filter((c) => '.·:=+*#%@'.includes(c));
+		expect(edgeGlyphs.length).toBeGreaterThan(0);
+		expect(densityGlyphs.length).toBeGreaterThan(0);
+	});
+
+	describe('the hummingbird, drawn with characters (owner verdict: "the bird looks wrong")', () => {
+		it('draws the gorget in a pink/magenta color the ambient field never produces (green/cyan/blue only) — proving the bird is actually composited in', () => {
+			const { engine, drawn } = makeEngine(false, 900, 258);
 			engine.draw(0);
-			const data = lastImage()!.data;
-			const [pr, pg, pb] = hexToRgb(TOKENS.pink);
-			const [mr, mg, mb] = hexToRgb(TOKENS.magenta);
-			let found = false;
-			for (let i = 0; i < data.length; i += 4) {
-				const isPink = data[i] === pr && data[i + 1] === pg && data[i + 2] === pb;
-				const isMagenta = data[i] === mr && data[i + 1] === mg && data[i + 2] === mb;
-				if ((isPink || isMagenta) && data[i + 3] === 255) {
-					found = true;
-					break;
-				}
-			}
-			expect(found).toBe(true);
+			const colorsUsed = new Set(drawn.map((d) => d.color));
+			expect(colorsUsed.has(TOKENS.pink) || colorsUsed.has(TOKENS.magenta)).toBe(true);
+		});
+
+		it('traces the bird silhouette boundary with directional edge glyphs, not just its density ramp', () => {
+			const { engine, drawn } = makeEngine(false, 900, 258);
+			engine.draw(0);
+			// Cells painted in a bird-only color (wing/ghost/farwing are
+			// rgba(...) mixes of `muted`/`fg2` — distinct from the field's flat
+			// hex inks) must include at least one directional edge glyph.
+			const birdColored = drawn.filter((d) => d.color.startsWith('rgba('));
+			expect(birdColored.length).toBeGreaterThan(0);
+			const birdChars = birdColored.map((d) => d.text).join('');
+			const edgeGlyphs = [...birdChars].filter((c) => '|/\\'.includes(c));
+			expect(edgeGlyphs.length).toBeGreaterThan(0);
 		});
 
 		it('keeps rendering deterministically under reduced motion with the bird composited in', () => {
-			const { engine: a, lastImage: imageA } = makeEngine(true);
+			const { engine: a, drawn: drawnA } = makeEngine(true);
 			a.draw(0);
-			const { engine: b, lastImage: imageB } = makeEngine(true);
+			const { engine: b, drawn: drawnB } = makeEngine(true);
 			b.draw(999999);
-			expect(Array.from(imageB()!.data)).toEqual(Array.from(imageA()!.data));
+			expect(drawnB).toEqual(drawnA);
 		});
+	});
 
-		// design #4938 item 6 ("the theme is ASCII ART, but super advanced"):
-		// the band is a raw pixel/dither raster (one canvas pixel per dither
-		// cell — too fine for legible text glyphs), so "shapes read as drawn"
-		// here means the SAME gradient technique the directional-glyph engine
-		// uses (fields/glyphs.ts's sampleGradient), applied to force a crisp,
-		// fully-opaque outline right at the bird's own silhouette boundary,
-		// instead of leaving translucent wing/farwing/ghost parts to fade
-		// into whatever partial alpha the dither field underneath happened
-		// to leave. Coordinates below were found by scanning this exact
-		// deterministic reduced-motion frame (900x258 -> 300x86 grid, seedT
-		// 4.2) for a real silhouette-edge cell and a real deep-interior
-		// translucent cell, so this is a genuine behavioral assertion, not a
-		// tautology.
-		it('outlines the bird silhouette: a translucent wing cell right at the edge (adjacent to true exterior) renders fully opaque', () => {
-			const { engine, lastImage } = makeEngine(true, 900, 258);
-			engine.draw(0);
-			const data = lastImage()!.data;
-			const width = lastImage()!.width;
-			const i = (35 * width + 194) * 4;
-			expect(data[i + 3]).toBe(255);
-		});
-
-		it('keeps a deep-interior translucent cell (no adjacent exterior) at its natural partial alpha — the boost only fires at real edges', () => {
-			const { engine, lastImage } = makeEngine(true, 900, 258);
-			engine.draw(0);
-			const data = lastImage()!.data;
-			const width = lastImage()!.width;
-			const i = (19 * width + 203) * 4;
-			expect(data[i + 3]).toBe(115);
-		});
+	it('resize()/draw() do not throw for a zero-width rect (unlaid-out canvas)', () => {
+		const { canvas } = fakeCanvas(0, 0);
+		const engine = new BandEngine({ canvas, tokens: TOKENS, reduced: false });
+		expect(() => engine.resize()).not.toThrow();
+		expect(() => engine.draw(0)).not.toThrow();
 	});
 });
 
-describe('computeBirdAnchor', () => {
-	it('scales the bird from the band size, not a fixed pixel size', () => {
-		const small = computeBirdAnchor(100, 40);
-		const big = computeBirdAnchor(200, 80);
+describe('computeBirdAnchor (physical pixels, not grid cells)', () => {
+	it('scales the bird from the band size in real pixels, not a fixed size', () => {
+		const small = computeBirdAnchor(400, 160);
+		const big = computeBirdAnchor(800, 320);
 		expect(big.S).toBeCloseTo(small.S * 2);
 		expect(big.ax).toBeCloseTo(small.ax * 2);
 		expect(big.ay).toBeCloseTo(small.ay * 2);
 	});
 
-	it('keeps the whole hummingbird (including the flower, its leftmost/lowest reach) inside the grid at a realistic band size', () => {
-		const cols = 400;
-		const rows = 86;
-		const { S, ax, ay } = computeBirdAnchor(cols, rows);
-		// sampleBird's own early-exit bounding box (fields/bird.ts): x in
-		// [-1.45, 0.88], y in [-0.9, 1.02] — the true bird+flower extent.
+	it('keeps the whole hummingbird (including the flower) inside the band at a realistic desktop size', () => {
+		const width = 1280;
+		const height = 258;
+		const { S, ax, ay } = computeBirdAnchor(width, height);
+		// sampleBird's own bounding box (fields/bird.ts): x in [-1.45, 0.88], y in [-0.9, 1.02].
 		expect(ax + -1.45 * S).toBeGreaterThan(0);
-		expect(ax + 0.88 * S).toBeLessThan(cols);
+		expect(ax + 0.88 * S).toBeLessThan(width);
 		expect(ay + -0.9 * S).toBeGreaterThan(0);
-		expect(ay + 1.02 * S).toBeLessThan(rows);
+		expect(ay + 1.02 * S).toBeLessThan(height);
 	});
 
-	it('keeps the bird comfortably inside the grid at a narrow (mobile) band size too', () => {
-		const cols = 200;
-		const rows = 80;
-		const { S, ax, ay } = computeBirdAnchor(cols, rows);
+	it('keeps the bird comfortably inside the band at a narrow (mobile) size too', () => {
+		const width = 400;
+		const height = 160;
+		const { S, ax, ay } = computeBirdAnchor(width, height);
 		expect(ax + -1.45 * S).toBeGreaterThan(0);
-		expect(ax + 0.88 * S).toBeLessThan(cols);
+		expect(ax + 0.88 * S).toBeLessThan(width);
 		expect(ay + -0.9 * S).toBeGreaterThan(0);
-		expect(ay + 1.02 * S).toBeLessThan(rows);
+		expect(ay + 1.02 * S).toBeLessThan(height);
+	});
+});
+
+describe('birdSpaceOf', () => {
+	const anchor = { S: 100, ax: 500, ay: 130 };
+
+	it('maps the anchor point itself to bird-space origin', () => {
+		expect(birdSpaceOf(anchor.ax, anchor.ay, anchor)).toEqual({ bx: 0, by: 0 });
+	});
+
+	it('maps one S away on each physical axis to one bird-space unit, independent of font aspect ratio', () => {
+		expect(birdSpaceOf(anchor.ax + anchor.S, anchor.ay, anchor)).toEqual({ bx: 1, by: 0 });
+		expect(birdSpaceOf(anchor.ax, anchor.ay + anchor.S, anchor)).toEqual({ bx: 0, by: 1 });
+		expect(birdSpaceOf(anchor.ax - anchor.S * 2, anchor.ay, anchor)).toEqual({ bx: -2, by: 0 });
 	});
 });
