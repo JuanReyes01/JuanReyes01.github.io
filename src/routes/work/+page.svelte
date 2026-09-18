@@ -9,7 +9,7 @@
 	import type { TimelineActionHandle } from '$lib/motion/actions/timeline';
 	import { waveform as waveformAction } from '$lib/motion/actions/waveform';
 	import type { WaveformActionHandle } from '$lib/motion/actions/waveform';
-	import { deriveWaveSignature } from '$lib/motion/fields/waveform';
+	import { deriveWaveSignature, deriveBuildPalette } from '$lib/motion/fields/waveform';
 	import { parseMonth, monthLabel, monthFromDate } from '$lib/domain/month';
 	import { deriveTimeline } from '$lib/domain/timeline';
 	import { readoutAt, type Readout } from '$lib/domain/readout';
@@ -66,9 +66,14 @@
 	// (amplitude/frequency/wave count derived from that build's metric or
 	// slug)" — both halves of the seed feed deriveWaveSignature (unit-tested
 	// in fields/waveform.test.ts), so two builds sharing a slug prefix or a
-	// coincidentally-similar metric still diverge in practice.
+	// coincidentally-similar metric still diverge in practice. The same seed
+	// also feeds deriveBuildPalette (owner-approved header prototype port,
+	// "off the earth tones" pass) — a build's shape and its color both come
+	// from the one seed.
 	function focusBuildWave(build: { slug: string; metric: { value: string } }) {
-		waveHandle?.setSignature(deriveWaveSignature(`${build.slug}:${build.metric.value}`));
+		const seed = `${build.slug}:${build.metric.value}`;
+		waveHandle?.setSignature(deriveWaveSignature(seed));
+		waveHandle?.setPalette(deriveBuildPalette(seed));
 	}
 
 	function mountTimeline(node: HTMLCanvasElement, params: { onReadout: (r: Readout) => void }) {

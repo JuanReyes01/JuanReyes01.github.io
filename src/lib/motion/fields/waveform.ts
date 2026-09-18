@@ -9,7 +9,10 @@
  * simulation are all plain math here; only `engines/waveform.ts` touches a
  * canvas.
  */
-/** A signature's own raw amplitude (0.5-0.85) rarely reaches the strip's
+import { clamp01 } from './math';
+import type { Tokens } from '../runtime/tokens';
+
+/** A signature's own raw amplitude (0.55-0.85) rarely reaches the strip's
  * full +-1 row range on its own; this boosts the displayed height so even
  * the calmest signature visibly travels most of the strip, not just its
  * middle third. */
@@ -48,15 +51,18 @@ export function hashString(s: string): number {
  * byte-ranges of the same hash feed the three dimensions, so changing any
  * part of the seed text plausibly changes all three, not just one.
  *
- * Ranges ported verbatim from the owner-approved header prototype: "ranges
- * start well above zero — every build has to read as a wave, not as a flat
- * line that happened to draw a bad hash." Floors: amplitude >= 0.5,
- * frequency >= 1.8, at least 2 harmonics.
+ * Ranges ported verbatim from the owner-approved header prototype's
+ * "rounder" pass: fewer, wider crests across the header read as a curve
+ * instead of a corner, so frequency drops to 0.9-2.1 (was 1.8-4.2) — roughly
+ * half as many oscillations across the same width — and amplitude narrows
+ * to 0.55-0.85 (was 0.5-0.85). `waveCount` is untouched. Floors still keep
+ * every build reading as a visible wave, never a flat line that happened to
+ * draw a bad hash.
  */
 export function deriveWaveSignature(seedText: string): WaveSignature {
 	const h = hashString(seedText);
-	const amplitude = 0.5 + ((h & 0xff) / 255) * 0.35; // 0.5 - 0.85
-	const frequency = 1.8 + (((h >>> 8) & 0xff) / 255) * 2.4; // 1.8 - 4.2
+	const amplitude = 0.55 + ((h & 0xff) / 255) * 0.3; // 0.55 - 0.85
+	const frequency = 0.9 + (((h >>> 8) & 0xff) / 255) * 1.2; // 0.9 - 2.1
 	const waveCount = 2 + (((h >>> 16) & 0xff) % 3); // 2 - 4 (integer)
 	return { amplitude, frequency, waveCount };
 }
@@ -64,16 +70,16 @@ export function deriveWaveSignature(seedText: string): WaveSignature {
 /**
  * The waveform's shape at position `x` (0-1 across the strip) and time `t`
  * (seconds), summing `sig.waveCount` harmonics (frequency x1, x2, x3...) at
- * `1/k` weight each — a classic additive-synthesis falloff, so higher
- * harmonics add texture without ever dominating the fundamental. Normalized
- * by the harmonic weights' own sum so the result never exceeds
- * `sig.amplitude` regardless of `waveCount`.
+ * `1/k²` weight each (owner-approved header prototype "rounder" pass — was
+ * `1/k`) — upper partials fall off faster, so they texture the curve
+ * instead of cornering it. Normalized by the harmonic weights' own sum so
+ * the result never exceeds `sig.amplitude` regardless of `waveCount`.
  */
 export function sampleWaveform(x: number, sig: WaveSignature, t: number): number {
 	let sum = 0;
 	let norm = 0;
 	for (let k = 1; k <= sig.waveCount; k++) {
-		const weight = 1 / k;
+		const weight = 1 / (k * k);
 		sum += weight * Math.sin(2 * Math.PI * sig.frequency * k * x + t * 0.6 + k * 1.3);
 		norm += weight;
 	}
@@ -202,4 +208,87 @@ export function traceGlyph(
 	// Row 0 is the TOP (height +1), so a decreasing row number means the
 	// wave is RISING between these two columns.
 	return row < prevRow ? '/' : '\\';
+}
+
+/** A rise this big or bigger (in fractional rows) reads as near-vertical —
+ * ported verbatim from the owner-approved header prototype's own
+ * `curveGlyph`. */
+const CURVE_NEAR_VERTICAL_RISE = 2.6;
+/** A rise at or above this (but below {@link CURVE_NEAR_VERTICAL_RISE}) reads
+ * as a diagonal rather than sub-cell wobble — ported verbatim from the
+ * prototype. */
+const CURVE_DIAGONAL_RISE = 0.85;
+
+/** The sub-cell vertical ramp, top of the cell to the floor — ported
+ * verbatim from the owner-approved header prototype's own `SUBCELL`. */
+const SUBCELL = ['‾', '-', '.', '_'] as const;
+
+/**
+ * Curvature, part 2 — sub-cell vertical resolution (owner-approved header
+ * prototype "rounder" pass). A character cell is many pixels tall, so a
+ * curve that moves half a cell between columns has nowhere to go and snaps
+ * into a staircase. {@link traceGlyph} only ever samples a column's ROUNDED
+ * row, so it can only ever land on one of `rows` discrete positions;
+ * `curveGlyph` instead takes the column's FLOAT row (before rounding) and,
+ * once a jump is too small to read as a diagonal or a near-vertical stroke,
+ * picks the glyph by WHERE inside the cell the curve actually sits (`‾`
+ * rides the top of the cell, `_` the floor) — four vertical positions per
+ * row instead of one.
+ *
+ * Ported verbatim from the prototype's own `curveGlyph`, including that
+ * `rows` is accepted (for the same call shape as {@link traceGlyph}) but
+ * never read — the sub-cell math only ever needs the two float rows and the
+ * cell being tested.
+ */
+export function curveGlyph(
+	rowFloat: number,
+	prevFloat: number,
+	y: number,
+	rows: number
+): '/' | '\\' | '|' | '‾' | '-' | '.' | '_' | null {
+	void rows;
+	const row = Math.round(rowFloat);
+	const prev = Math.round(prevFloat);
+	const lo = Math.min(row, prev);
+	const hi = Math.max(row, prev);
+	if (y < lo || y > hi) return null;
+
+	const rise = Math.abs(rowFloat - prevFloat);
+	if (rise >= CURVE_NEAR_VERTICAL_RISE) return '|';
+	if (rise >= CURVE_DIAGONAL_RISE) return rowFloat < prevFloat ? '/' : '\\';
+
+	const frac = clamp01(rowFloat - Math.floor(rowFloat));
+	return SUBCELL[Math.min(3, Math.floor(frac * 4))];
+}
+
+/** The pair a build's waveform lands on — two names from the motion
+ * `Tokens` type (design D1: a type-only import, so this stays DOM-free). */
+export type PaletteTokenPair = [keyof Tokens, keyof Tokens];
+
+/** The six hue pairs a build's own waveform can land on (owner-approved
+ * header prototype port, "off the earth tones" pass): "the work section's
+ * amber/rose is one of six, not the only one." Ported verbatim, in this
+ * exact order, from the prototype's own `PAIRS` — `deriveBuildPalette`
+ * indexes into it by the same {@link hashString} the shape itself uses, so a
+ * build's color and its wave shape both come from one deterministic seed. */
+const PALETTE_PAIRS: ReadonlyArray<PaletteTokenPair> = [
+	['cyan', 'blue'],
+	['green', 'cyan'],
+	['magenta', 'pink'],
+	['blue', 'magenta'],
+	['yellow', 'pink'],
+	['pink', 'magenta']
+];
+
+/**
+ * Maps a build's own seed text (same shape callers already pass to
+ * {@link deriveWaveSignature}, e.g. `${slug}:${metric.value}`) to one of the
+ * 6 {@link PALETTE_PAIRS}, deterministically. `engines/waveform.ts` resolves
+ * the two token names this returns to actual colors (and mixes between
+ * them) at draw time, once per frame — this function only ever picks WHICH
+ * pair, never a color itself, keeping it pure and DOM-free (design D1).
+ */
+export function deriveBuildPalette(seedText: string): PaletteTokenPair {
+	const pair = PALETTE_PAIRS[hashString(seedText) % PALETTE_PAIRS.length];
+	return [pair[0], pair[1]];
 }

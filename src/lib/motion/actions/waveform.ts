@@ -12,7 +12,7 @@
 import { createCanvasAction, type CanvasActionDeps } from '../runtime/canvas-action';
 import { browserCanvasActionDeps } from '../runtime/browser';
 import { WaveformEngine } from '../engines/waveform';
-import type { WaveSignature } from '../fields/waveform';
+import type { WaveSignature, PaletteTokenPair } from '../fields/waveform';
 import type { Section } from '../../site';
 
 export interface WaveformActionParams {
@@ -22,6 +22,10 @@ export interface WaveformActionParams {
 export interface WaveformActionHandle {
 	setSignature(signature: WaveSignature): void;
 	resetSignature(): void;
+	/** Companion to `setSignature` — same seed, via `deriveBuildPalette`
+	 * (`fields/waveform.ts`) — so a build's shape and color change together. */
+	setPalette(pair: PaletteTokenPair): void;
+	resetPalette(): void;
 	destroy(): void;
 }
 
@@ -58,6 +62,12 @@ export function createWaveformAction(
 			},
 			resetSignature() {
 				engine?.resetSignature();
+			},
+			setPalette(pair) {
+				engine?.setPalette(pair);
+			},
+			resetPalette() {
+				engine?.resetPalette();
 			},
 			destroy() {
 				node.removeEventListener('pointermove', onPointerMove);

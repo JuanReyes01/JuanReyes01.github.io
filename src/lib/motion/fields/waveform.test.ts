@@ -6,6 +6,8 @@ import {
 	pokeWave1D,
 	stepWave1D,
 	traceGlyph,
+	curveGlyph,
+	deriveBuildPalette,
 	waveformPokeAmount,
 	softClip
 } from './waveform';
@@ -43,23 +45,25 @@ describe('deriveWaveSignature', () => {
 		expect(differs).toBe(true);
 	});
 
-	// Coordinator correction (approved header prototype port): "ranges start
-	// well above zero: every build has to read as a wave, not as a flat line
-	// that happened to draw a bad hash" — floors are amplitude >= 0.5,
-	// frequency >= 1.8, waveCount >= 2, ported verbatim from the prototype's
-	// own tuned `deriveWaveSignature`.
+	// Owner-approved header prototype port, "rounder" pass: fewer, wider
+	// crests across the header read as a curve instead of a corner, so the
+	// frequency range drops to 0.9-2.1 (was 1.8-4.2) — roughly half as many
+	// oscillations across the same width. Amplitude narrows to 0.55-0.85
+	// (was 0.5-0.85); waveCount is untouched. Ported verbatim from the
+	// prototype's own tuned `deriveWaveSignature`.
 	it('keeps every dimension within the prototype-tuned, always-visible range', () => {
 		for (const seed of [
 			'creditbay:20 → 600',
 			'amd:~90%',
 			'credit-brain:10',
+			'development-analytics:3',
 			'opinion-corpus:100k+'
 		]) {
 			const sig = deriveWaveSignature(seed);
-			expect(sig.amplitude).toBeGreaterThanOrEqual(0.5);
+			expect(sig.amplitude).toBeGreaterThanOrEqual(0.55);
 			expect(sig.amplitude).toBeLessThanOrEqual(0.85);
-			expect(sig.frequency).toBeGreaterThanOrEqual(1.8);
-			expect(sig.frequency).toBeLessThanOrEqual(4.2);
+			expect(sig.frequency).toBeGreaterThanOrEqual(0.9);
+			expect(sig.frequency).toBeLessThanOrEqual(2.1);
 			expect(Number.isInteger(sig.waveCount)).toBe(true);
 			expect(sig.waveCount).toBeGreaterThanOrEqual(2);
 			expect(sig.waveCount).toBeLessThanOrEqual(4);
@@ -100,6 +104,22 @@ describe('sampleWaveform', () => {
 		const a = sampleWaveform(0.3, sig, 0);
 		const b = sampleWaveform(0.3, sig, 3);
 		expect(a).not.toBe(b);
+	});
+
+	// Owner-approved header prototype port, "rounder" pass: harmonic weight
+	// is now `1/k²` (was `1/k`) — upper partials fall off faster, texturing
+	// the curve instead of cornering it. Pinned to the exact formula (not
+	// just a bound) so a regression back to `1/k` fails this test.
+	it('weights harmonic k by 1/k² (not 1/k) when summing multiple harmonics', () => {
+		const twoHarmonics = { amplitude: 1, frequency: 1, waveCount: 2 };
+		const x = 0.2;
+		const t = 4;
+		const k1 = Math.sin(2 * Math.PI * 1 * x + t * 0.6 + 1 * 1.3);
+		const k2 = Math.sin(2 * Math.PI * 2 * x + t * 0.6 + 2 * 1.3);
+		const weight1 = 1;
+		const weight2 = 1 / 4; // 1/(2*2), not 1/2
+		const expected = (weight1 * k1 + weight2 * k2) / (weight1 + weight2);
+		expect(sampleWaveform(x, twoHarmonics, t)).toBeCloseTo(expected);
 	});
 });
 
@@ -275,5 +295,136 @@ describe('traceGlyph', () => {
 		expect(traceGlyph(0, 0, 0, ROWS)).toBe('‾');
 		expect(traceGlyph(ROWS - 1, ROWS - 1, ROWS - 1, ROWS)).toBe('_');
 		expect(traceGlyph(3, 3, 3, ROWS)).toBe('-');
+	});
+});
+
+// Curvature, part 2 — sub-cell resolution (owner-approved header prototype
+// port). A character cell is many pixels tall, so a curve that moves half a
+// cell between columns has nowhere to go and snaps into a staircase; picking
+// the glyph by WHERE inside the cell the curve sits gives the trace four
+// vertical positions per row instead of one. Ported verbatim from the
+// prototype's own `curveGlyph`.
+describe('curveGlyph', () => {
+	const ROWS = 7;
+
+	it('skips a row outside the [round(prevFloat), round(rowFloat)] span (no glyph drawn there)', () => {
+		expect(curveGlyph(4.2, 1.8, 0, ROWS)).toBeNull();
+		expect(curveGlyph(4.2, 1.8, 5, ROWS)).toBeNull();
+	});
+
+	it('rounds both rows before computing the span, so a jump entirely inside one rounded row still draws', () => {
+		// round(3.4) === round(2.6) === 3, so the only in-span row is y=3.
+		expect(curveGlyph(3.4, 2.6, 3, ROWS)).not.toBeNull();
+		expect(curveGlyph(3.4, 2.6, 2, ROWS)).toBeNull();
+		expect(curveGlyph(3.4, 2.6, 4, ROWS)).toBeNull();
+	});
+
+	it('uses "|" once the rise is near-vertical (>= 2.6), regardless of direction', () => {
+		expect(curveGlyph(1, 4, 2, ROWS)).toBe('|');
+		expect(curveGlyph(4, 1, 2, ROWS)).toBe('|');
+	});
+
+	it('uses "/" for a rising move (rowFloat < prevFloat) once the rise clears the 0.85 diagonal threshold', () => {
+		expect(curveGlyph(2, 3, 2, ROWS)).toBe('/');
+	});
+
+	it('uses "\\\\" for a falling move (rowFloat > prevFloat) once the rise clears the 0.85 diagonal threshold', () => {
+		expect(curveGlyph(3, 2, 3, ROWS)).toBe('\\');
+	});
+
+	it('does NOT use a diagonal for a rise just under the 0.85 threshold — falls through to the sub-cell ramp instead', () => {
+		const glyph = curveGlyph(3.0, 3.8, 3, ROWS);
+		expect(glyph).not.toBe('/');
+		expect(glyph).not.toBe('\\');
+		expect(glyph).not.toBe('|');
+	});
+
+	// The four sub-cell positions, picked by `frac = rowFloat - floor(rowFloat)`
+	// bucketed into quarters: ['‾', '-', '.', '_'].
+	it('picks "‾" for a fractional row position in [0, 0.25)', () => {
+		expect(curveGlyph(3.1, 3.1, 3, ROWS)).toBe('‾');
+	});
+
+	it('picks "-" for a fractional row position in [0.25, 0.5)', () => {
+		expect(curveGlyph(3.3, 3.3, 3, ROWS)).toBe('-');
+	});
+
+	it('picks "." for a fractional row position in [0.5, 0.75)', () => {
+		expect(curveGlyph(3.6, 3.6, 4, ROWS)).toBe('.');
+	});
+
+	it('picks "_" for a fractional row position in [0.75, 1)', () => {
+		expect(curveGlyph(3.9, 3.9, 4, ROWS)).toBe('_');
+	});
+});
+
+// The pair of hue tokens a build's own waveform lands on (owner-approved
+// header prototype port, "off the earth tones" pass): "the work section's
+// amber/rose is one of six, not the only one."
+describe('deriveBuildPalette', () => {
+	const REAL_TOKENS = [
+		'bg',
+		'banner',
+		'fg',
+		'fg2',
+		'muted',
+		'line',
+		'cyan',
+		'magenta',
+		'yellow',
+		'green',
+		'blue',
+		'pink'
+	];
+
+	it('is deterministic — the same seed text always lands on the same pair', () => {
+		const a = deriveBuildPalette('creditbay:20 → 600');
+		const b = deriveBuildPalette('creditbay:20 → 600');
+		expect(a).toEqual(b);
+	});
+
+	it('returns a pair where both names are real motion Tokens keys', () => {
+		for (const seed of [
+			'creditbay:20 → 600',
+			'amd:~90%',
+			'credit-brain:10',
+			'development-analytics:3',
+			'opinion-corpus:100k+'
+		]) {
+			const [first, second] = deriveBuildPalette(seed);
+			expect(REAL_TOKENS).toContain(first);
+			expect(REAL_TOKENS).toContain(second);
+		}
+	});
+
+	it('lands on more than one distinct pair across the five real build seeds (not a constant fallback)', () => {
+		const seeds = [
+			'creditbay:20 → 600',
+			'amd:~90%',
+			'credit-brain:10',
+			'development-analytics:3',
+			'opinion-corpus:100k+'
+		];
+		const pairs = new Set(seeds.map((seed) => deriveBuildPalette(seed).join('/')));
+		expect(pairs.size).toBeGreaterThan(1);
+	});
+
+	it('only ever returns one of the six owner-approved pairs, in this exact order', () => {
+		// Ported verbatim from the prototype's own `PAIRS` — the work
+		// section's amber/rose is one of six, not the only one.
+		const knownPairs = new Set(
+			[
+				['cyan', 'blue'],
+				['green', 'cyan'],
+				['magenta', 'pink'],
+				['blue', 'magenta'],
+				['yellow', 'pink'],
+				['pink', 'magenta']
+			].map((pair) => pair.join('/'))
+		);
+		for (let i = 0; i < 50; i++) {
+			const pair = deriveBuildPalette(`seed-${i}`);
+			expect(knownPairs.has(pair.join('/'))).toBe(true);
+		}
 	});
 });
