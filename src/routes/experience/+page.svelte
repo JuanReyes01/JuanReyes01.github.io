@@ -1,6 +1,16 @@
 <script lang="ts">
 	import SeoHead from '$lib/components/SeoHead.svelte';
+	import StaticAsciiHeader from '$lib/components/StaticAsciiHeader.svelte';
 	import { EXPERIENCE_REDIRECT_TARGET, buildExperienceRedirectScript } from '$lib/domain/redirects';
+
+	// Zero-JS route (design route table) — reuses /work/'s own figlet, the
+	// page this one redirects to (owner decision site/v2-direction slice S3,
+	// item C: still ASCII, still no client JS).
+	const FIG = `__        _____  ____  _  __
+\\ \\      / / _ \\|  _ \\| |/ /
+ \\ \\ /\\ / / | | | |_) | ' /
+  \\ V  V /| |_| |  _ <| . \\
+   \\_/\\_/  \\___/|_| \\_\\_|\\_\\`;
 
 	// Built here (not inline in the markup), with the HTML tag-name literal
 	// split mid-word — design D8's precedent for the legacy anchor redirect
@@ -25,6 +35,7 @@
 />
 
 <section class="redirect" aria-labelledby="redirect-title">
+	<StaticAsciiHeader art={FIG} />
 	<h1 id="redirect-title">Moved</h1>
 	<p>
 		Experience is now part of
