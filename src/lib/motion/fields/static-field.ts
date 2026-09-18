@@ -3,12 +3,12 @@
  * decision `site/v2-direction` slice S3, item C): `/work/[slug]/`,
  * `/experience/` and `/404` must stay zero client JS but still get a
  * full-bleed ASCII header, "in the spirit of" the same header every
- * hydrated page gets. Reuses the exact same ambient cloud field
- * `HeaderFieldEngine` draws to a canvas (`clouds.ts`), evaluated once at
- * BUILD TIME with a fixed seed and instant — pure TS, no canvas, no DOM, no
- * client JS — and returned as plain text rows for a server-rendered `<pre>`
- * (design D1 boundary: this file lives in `motion/fields/`, so it's linted
- * DOM-free like every other field).
+ * hydrated page gets. Reuses the exact same ambient cloud field maths
+ * `SkyEngine`'s own cloud layer draws to a canvas (`clouds.ts`), evaluated
+ * once at BUILD TIME with a fixed seed and instant — pure TS, no canvas, no
+ * DOM, no client JS — and returned as plain text rows for a server-rendered
+ * `<pre>` (design D1 boundary: this file lives in `motion/fields/`, so it's
+ * linted DOM-free like every other field).
  *
  * Owner correction (apply-fix round 1): "ambient fields use the density
  * ramp only" — this is procedural noise with no real, coherent shape to
@@ -20,8 +20,8 @@ import { cloudField } from './clouds';
 import { densityGlyph } from './glyphs';
 
 /** An arbitrary fixed instant — matches the spirit of `BandEngine`/
- * `HeaderFieldEngine`'s own fixed reduced-motion seed times: a calm, static
- * pose, not "the start" of anything. */
+ * `SkyEngine`'s own fixed reduced-motion seed times: a calm, static pose,
+ * not "the start" of anything. */
 const STATIC_T = 6.4;
 /** A cell-space scale roughly matching a real header's `cw`/`ch` ratio at a
  * typical font size (~7px wide, ~14px tall) — there is no real canvas or

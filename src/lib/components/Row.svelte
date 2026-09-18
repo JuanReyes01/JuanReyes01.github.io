@@ -207,12 +207,19 @@
 	.more :global(li) {
 		margin: 6px 0;
 	}
+	/* Approved header prototype: "hovering or focusing a build row...
+	   highlights the row" — mouse hover gets the same treatment focus
+	   already had, so the /work/ waveform's own build rows (and every other
+	   row list) read as interactive under the pointer, not just the
+	   keyboard. */
+	[data-row]:hover,
 	[data-row]:focus,
 	[data-row]:focus-visible {
 		background: color-mix(in srgb, var(--pc, var(--cyan)) 12%, transparent);
 		box-shadow: inset 2px 0 0 var(--pc, var(--cyan));
 		outline: none;
 	}
+	[data-row]:hover .title,
 	[data-row]:focus .title,
 	[data-row]:focus-visible .title {
 		color: var(--pc, var(--cyan));
