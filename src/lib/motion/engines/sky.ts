@@ -19,6 +19,12 @@ import { ditherOffset4x4 } from '../fields/dither';
 import { clamp01 } from '../fields/math';
 import { pickGlyph, DENSITY_RAMP } from '../fields/glyphs';
 import { resolveSkyColor } from './sky-palette';
+import {
+	drawCharGrid,
+	layoutCharGrid,
+	devicePixelRatioCapped,
+	MONO_FONT_NAME
+} from '../runtime/char-grid';
 import type { Engine } from '../runtime/canvas-action';
 import type { Tokens } from '../runtime/tokens';
 
@@ -40,11 +46,6 @@ export interface SkyEngineOptions {
 	canvas: HTMLCanvasElement;
 	tokens: Tokens;
 	reduced: boolean;
-}
-
-function devicePixelRatioCapped(): number {
-	if (typeof window === 'undefined') return 1;
-	return Math.min(window.devicePixelRatio || 1, 2);
 }
 
 export class SkyEngine implements Engine {
@@ -104,24 +105,23 @@ export class SkyEngine implements Engine {
 	resize(): void {
 		const rect = this.canvas.getBoundingClientRect();
 		if (!rect.width) return;
-		this.width = rect.width;
-		this.height = rect.height;
-
-		const dpr = devicePixelRatioCapped();
-		this.canvas.width = Math.max(1, Math.round(rect.width * dpr));
-		this.canvas.height = Math.max(1, Math.round(rect.height * dpr));
 		this.fontSize = rect.width < 560 ? 10 : 12;
-		const font = `${this.fontSize}px "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace`;
-		this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-		this.ctx.font = font;
-		this.cw = this.ctx.measureText('M').width || this.fontSize * 0.6;
-		this.ch = Math.round(this.fontSize * 1.22);
+		const layout = layoutCharGrid({
+			canvas: this.canvas,
+			ctx: this.ctx,
+			dpr: devicePixelRatioCapped(),
+			fontPx: this.fontSize,
+			fontFamily: MONO_FONT_NAME
+		});
+		if (!layout) return;
+		this.width = layout.width;
+		this.height = layout.height;
+		this.cw = layout.cw;
+		this.ch = layout.ch;
 
-		const cols = Math.max(4, Math.ceil(rect.width / this.cw));
-		const rows = Math.max(2, Math.ceil(rect.height / this.ch));
-		if (cols !== this.cols || rows !== this.rows) {
-			this.cols = cols;
-			this.rows = rows;
+		if (layout.cols !== this.cols || layout.rows !== this.rows) {
+			this.cols = layout.cols;
+			this.rows = layout.rows;
 			this.ripple = this.reduced ? null : this.freshRippleBuffers();
 		}
 	}
@@ -182,66 +182,45 @@ export class SkyEngine implements Engine {
 			);
 		};
 
-		for (let y = 0; y < this.rows; y++) {
-			// E4 (perf): batch one string per distinct color key for this row —
-			// exactly like the legacy `Sky.prototype.draw`'s `used[key]` row
-			// buffers — instead of one fillStyle+fillText call per cell. Draw
-			// calls end up bounded by rows x distinct colors, not cell count.
-			const rowBatches = new Map<string, string[]>();
-			for (let x = 0; x < this.cols; x++) {
-				let colorKey: Parameters<typeof resolveSkyColor>[0];
+		drawCharGrid(ctx, this.cols, this.rows, this.ch, (x, y) => {
+			let colorKey: Parameters<typeof resolveSkyColor>[0];
 
-				let sx = x;
-				let sy = y;
-				let boost = 0;
-				let energy = 0;
-				if (this.ripple && x > 0 && y > 0 && x < this.cols - 1 && y < this.rows - 1) {
-					const i = y * this.cols + x;
-					const r = this.ripple.current;
-					energy = r[i];
-					sx += (r[i + 1] - r[i - 1]) * 1.5;
-					sy += (r[i + this.cols] - r[i - this.cols]) * 1.5;
-					boost = Math.min(1, Math.abs(energy) * 0.28);
-				}
-				const X = sx * unitX;
-				const Y = sy * unitY;
-				let value = cloudField(
-					(px, py) => sampleTexture(this.textureA, px, py),
-					(px, py) => sampleTexture(this.textureB, px, py),
-					X,
-					Y,
-					t,
-					heightUnits
-				);
-				value = clamp01(value + boost + ditherOffset4x4(x, y) * 0.09);
-				const glyph = pickGlyph(cellField, x, y, value, {
-					edgeThreshold: EDGE_THRESHOLD,
-					ramp: DENSITY_RAMP
-				});
-				if (glyph === ' ') continue;
-				if (boost > 0.35) {
-					colorKey = energy > 0 ? 'hotP' : 'hotC';
-				} else {
-					const hueSample = sampleTexture(this.textureB, X * 0.35 + t * 1.2, Y * 0.35 + 40);
-					const hue = hueSample < 0.47 ? 'c' : hueSample < 0.56 ? 'b' : 'm';
-					colorKey = `${hue}${value > 0.42 ? '1' : '0'}` as Parameters<typeof resolveSkyColor>[0];
-				}
-
-				let batch = rowBatches.get(colorKey);
-				if (!batch) {
-					batch = new Array<string>(this.cols).fill(' ');
-					rowBatches.set(colorKey, batch);
-				}
-				batch[x] = glyph;
+			let sx = x;
+			let sy = y;
+			let boost = 0;
+			let energy = 0;
+			if (this.ripple && x > 0 && y > 0 && x < this.cols - 1 && y < this.rows - 1) {
+				const i = y * this.cols + x;
+				const r = this.ripple.current;
+				energy = r[i];
+				sx += (r[i + 1] - r[i - 1]) * 1.5;
+				sy += (r[i + this.cols] - r[i - this.cols]) * 1.5;
+				boost = Math.min(1, Math.abs(energy) * 0.28);
 			}
-
-			for (const [colorKey, batch] of rowBatches) {
-				ctx.fillStyle = resolveSkyColor(
-					colorKey as Parameters<typeof resolveSkyColor>[0],
-					this.tokens
-				);
-				ctx.fillText(batch.join(''), 0, y * this.ch);
+			const X = sx * unitX;
+			const Y = sy * unitY;
+			let value = cloudField(
+				(px, py) => sampleTexture(this.textureA, px, py),
+				(px, py) => sampleTexture(this.textureB, px, py),
+				X,
+				Y,
+				t,
+				heightUnits
+			);
+			value = clamp01(value + boost + ditherOffset4x4(x, y) * 0.09);
+			const glyph = pickGlyph(cellField, x, y, value, {
+				edgeThreshold: EDGE_THRESHOLD,
+				ramp: DENSITY_RAMP
+			});
+			if (glyph === ' ') return null;
+			if (boost > 0.35) {
+				colorKey = energy > 0 ? 'hotP' : 'hotC';
+			} else {
+				const hueSample = sampleTexture(this.textureB, X * 0.35 + t * 1.2, Y * 0.35 + 40);
+				const hue = hueSample < 0.47 ? 'c' : hueSample < 0.56 ? 'b' : 'm';
+				colorKey = `${hue}${value > 0.42 ? '1' : '0'}` as Parameters<typeof resolveSkyColor>[0];
 			}
-		}
+			return { glyph, color: resolveSkyColor(colorKey, this.tokens) };
+		});
 	}
 }
