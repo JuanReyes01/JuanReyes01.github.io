@@ -142,3 +142,72 @@ describe('createWaveformAction', () => {
 		pokeSpy.mockRestore();
 	});
 });
+
+describe('createWaveformAction, before the engine exists', () => {
+	// The engine is only built once `loadFonts()` resolves, which in a real
+	// browser is a font fetch — but `/work/[slug]/` sets its build's own
+	// signature and palette SYNCHRONOUSLY on mount. Dropping those calls made
+	// every case study render the default waveform in the default colours.
+	function deferredFontsDeps(): { deps: CanvasActionDeps; resolveFonts: () => void } {
+		const base = fakeDeps();
+		let resolveFonts = () => {};
+		const fonts = new Promise<void>((resolve) => {
+			resolveFonts = resolve;
+		});
+		return { deps: { ...base, loadFonts: () => fonts }, resolveFonts };
+	}
+
+	it('applies a signature set before the fonts resolved, once the engine is built', async () => {
+		const setSignature = vi.spyOn(WaveformEngine.prototype, 'setSignature');
+		const { deps, resolveFonts } = deferredFontsDeps();
+		const handle = createWaveformAction(deps)(fakeCanvas(), { section: 'work' });
+
+		const signature = { amplitude: 0.7, frequency: 1.4, waveCount: 3 };
+		handle.setSignature(signature);
+		expect(setSignature).not.toHaveBeenCalled();
+
+		resolveFonts();
+		await Promise.resolve();
+		await Promise.resolve();
+		await Promise.resolve();
+
+		expect(setSignature).toHaveBeenCalledWith(signature);
+		setSignature.mockRestore();
+	});
+
+	it('applies a palette set before the fonts resolved, once the engine is built', async () => {
+		const setPalette = vi.spyOn(WaveformEngine.prototype, 'setPalette');
+		const { deps, resolveFonts } = deferredFontsDeps();
+		const handle = createWaveformAction(deps)(fakeCanvas(), { section: 'work' });
+
+		handle.setPalette(['pink', 'magenta']);
+		expect(setPalette).not.toHaveBeenCalled();
+
+		resolveFonts();
+		await Promise.resolve();
+		await Promise.resolve();
+		await Promise.resolve();
+
+		expect(setPalette).toHaveBeenCalledWith(['pink', 'magenta']);
+		setPalette.mockRestore();
+	});
+
+	it('keeps the LAST value requested before the engine existed', async () => {
+		const setSignature = vi.spyOn(WaveformEngine.prototype, 'setSignature');
+		const { deps, resolveFonts } = deferredFontsDeps();
+		const handle = createWaveformAction(deps)(fakeCanvas(), { section: 'work' });
+
+		handle.setSignature({ amplitude: 0.6, frequency: 1, waveCount: 2 });
+		const last = { amplitude: 0.8, frequency: 2, waveCount: 4 };
+		handle.setSignature(last);
+
+		resolveFonts();
+		await Promise.resolve();
+		await Promise.resolve();
+		await Promise.resolve();
+
+		expect(setSignature).toHaveBeenCalledTimes(1);
+		expect(setSignature).toHaveBeenCalledWith(last);
+		setSignature.mockRestore();
+	});
+});
