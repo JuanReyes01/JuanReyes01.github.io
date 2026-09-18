@@ -26,6 +26,7 @@
  */
 import { makeTexture, sampleTexture } from '../fields/noise';
 import { iridescentField } from '../fields/iridescence';
+import { pokeRipple, stepRipple } from '../fields/ripple';
 import { clamp01 } from '../fields/math';
 import { pickGlyph, densityGlyph, DENSITY_RAMP } from '../fields/glyphs';
 import { birdGeometryScale, computeBirdMotion, sampleBird, type BirdFrame } from '../fields/bird';
@@ -47,15 +48,11 @@ import type { Engine } from '../runtime/canvas-action';
  * font's own aspect ratio. Anchoring in physical pixels and converting each
  * cell to its physical center before sampling (see `draw()`) keeps the bird
  * round on screen regardless of font metrics. Proportional to the band's own
- * size, not a fixed pixel size, so it stays a comfortably-sized,
- * comfortably-clear-of-the-edges silhouette at any band size — sized and
- * balanced against `sampleBird`'s own documented bounding box (`fields/bird.ts`:
- * x in [-1.45, 0.88], y in [-0.9, 1.02], which includes the flower), verified
- * in `band.test.ts`.
+ * size, not a fixed pixel size. The hummingbird's own bounding box
+ * (`fields/bird.ts`'s early-exit bounds, flower included): x in
+ * [-1.45, 0.88], y in [-0.9, 1.02]. Its midpoint is what this centers in the
+ * frame — see `band.test.ts`.
  */
-/** The hummingbird's own bounding box (`fields/bird.ts`'s early-exit bounds,
- * flower included): x in [-1.45, 0.88], y in [-0.9, 1.02]. Its midpoint is
- * what {@link computeBirdAnchor} centers in the frame. */
 const BIRD_BBOX_X_MID = (0.88 + -1.45) / 2;
 const BIRD_BBOX_Y_MID = (1.02 + -0.9) / 2;
 
@@ -143,6 +140,13 @@ export class BandEngine implements Engine {
 	private rows = 0;
 	private fontPx = DESKTOP_FONT_PX;
 	private bird = { S: 0, ax: 0, ay: 0 };
+	/** Pointer/touch ripple through the field (owner decision `site/v2-direction`
+	 * slice S3, item B: "plus the pointer/touch ripple", on every full-bleed
+	 * header — `/field/`'s header IS this band). Same mechanism as
+	 * `SkyEngine`'s ripple (`fields/ripple.ts`), displacing the iridescent
+	 * field's sample coordinates only — the hummingbird keeps its own
+	 * deterministic flight, untouched by pointer interaction. */
+	private ripple: { current: Float32Array; previous: Float32Array } | null = null;
 
 	constructor(opts: BandEngineOptions) {
 		this.canvas = opts.canvas;
@@ -157,6 +161,22 @@ export class BandEngine implements Engine {
 
 	setReduced(reduced: boolean): void {
 		this.reduced = reduced;
+		if (reduced) this.ripple = null;
+		else if (this.cols && this.rows) this.ripple = this.freshRippleBuffers();
+	}
+
+	private freshRippleBuffers() {
+		const size = this.cols * this.rows;
+		return { current: new Float32Array(size), previous: new Float32Array(size) };
+	}
+
+	/** Adds ripple energy at a pointer/touch position, in canvas-local client coordinates. */
+	poke(clientX: number, clientY: number, strength: number): void {
+		if (this.reduced || !this.ripple || !this.cols) return;
+		const rect = this.canvas.getBoundingClientRect();
+		const cellX = Math.floor((clientX - rect.left) / this.cw);
+		const cellY = Math.floor((clientY - rect.top) / this.ch);
+		pokeRipple(this.ripple.current, this.cols, this.rows, cellX, cellY, strength);
 	}
 
 	/** Unused: the shared scheduler's boolean visibility already gates
@@ -184,6 +204,7 @@ export class BandEngine implements Engine {
 			minRows: MIN_ROWS
 		});
 		if (!layout) return;
+		const gridChanged = layout.cols !== this.cols || layout.rows !== this.rows;
 		this.width = layout.width;
 		this.height = layout.height;
 		this.cw = layout.cw;
@@ -191,17 +212,39 @@ export class BandEngine implements Engine {
 		this.cols = layout.cols;
 		this.rows = layout.rows;
 		this.bird = computeBirdAnchor(this.width, this.height);
+		if (gridChanged) this.ripple = this.reduced ? null : this.freshRippleBuffers();
 	}
 
 	draw(now: number): void {
 		if (!this.cols || !this.rows) return;
 		const t = this.reduced ? this.seedT : this.seedT + now / 1000;
+		if (!this.reduced && this.ripple) {
+			const { next, prev } = stepRipple(
+				this.cols,
+				this.rows,
+				this.ripple.current,
+				this.ripple.previous
+			);
+			this.ripple = { current: next, previous: prev };
+		}
 		const ctx = this.ctx;
 		ctx.clearRect(0, 0, this.width, this.height);
 		ctx.textBaseline = 'top';
 
 		const samplePrimary = (x: number, y: number) => sampleTexture(this.texturePrimary, x, y);
 		const sampleShimmer = (x: number, y: number) => sampleTexture(this.textureShimmer, x, y);
+		// Displaces the field's sample coordinates only (owner decision:
+		// every header gets a pointer/touch ripple) — no gradient sampling
+		// needed here now, since the ambient field is density-only (see the
+		// `densityGlyph` call below).
+		const rippleOffset = (x: number, y: number): { dx: number; dy: number } => {
+			if (!this.ripple || x <= 0 || y <= 0 || x >= this.cols - 1 || y >= this.rows - 1) {
+				return { dx: 0, dy: 0 };
+			}
+			const i = y * this.cols + x;
+			const r = this.ripple.current;
+			return { dx: (r[i + 1] - r[i - 1]) * 1.5, dy: (r[i + this.cols] - r[i - this.cols]) * 1.5 };
+		};
 
 		// Same pure motion as the home hero used (owner rule: "same calm
 		// settings" — 1.1 wingbeats/s, gentle hover/sway), just recomposited
@@ -252,10 +295,10 @@ export class BandEngine implements Engine {
 			// shape to trace, so no `pickGlyph` edge tracing here (that's
 			// reserved for the bird below). (b) "keep the ambient field
 			// quiet behind it (lower contrast/density) so the bird reads
-			// instantly" — `FIELD_DIM` scales the density down and
-			// `FIELD_ALPHA` renders it at reduced opacity.
+			// instantly" — `FIELD_DIM` scales the density down.
 			const scanline = y % 2 === 1 ? SCANLINE_DIM : 1;
-			const { value, ink } = iridescentField(samplePrimary, sampleShimmer, x, y, t);
+			const { dx, dy } = rippleOffset(x, y);
+			const { value, ink } = iridescentField(samplePrimary, sampleShimmer, x + dx, y + dy, t);
 			const glyph = densityGlyph(clamp01(value * scanline * FIELD_DIM));
 			if (glyph === ' ') return null;
 			return { glyph, color: this.tokens[ink] };
