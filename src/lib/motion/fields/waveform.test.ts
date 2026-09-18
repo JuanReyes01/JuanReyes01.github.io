@@ -5,7 +5,9 @@ import {
 	sampleWaveform,
 	pokeWave1D,
 	stepWave1D,
-	traceGlyph
+	traceGlyph,
+	staticWaveformRows,
+	waveformPokeAmount
 } from './waveform';
 
 describe('hashString', () => {
@@ -41,7 +43,12 @@ describe('deriveWaveSignature', () => {
 		expect(differs).toBe(true);
 	});
 
-	it('keeps every dimension within its documented, sane range', () => {
+	// Coordinator correction (approved header prototype port): "ranges start
+	// well above zero: every build has to read as a wave, not as a flat line
+	// that happened to draw a bad hash" — floors are amplitude >= 0.5,
+	// frequency >= 1.8, waveCount >= 2, ported verbatim from the prototype's
+	// own tuned `deriveWaveSignature`.
+	it('keeps every dimension within the prototype-tuned, always-visible range', () => {
 		for (const seed of [
 			'creditbay:20 → 600',
 			'amd:~90%',
@@ -49,12 +56,12 @@ describe('deriveWaveSignature', () => {
 			'opinion-corpus:100k+'
 		]) {
 			const sig = deriveWaveSignature(seed);
-			expect(sig.amplitude).toBeGreaterThanOrEqual(0.2);
+			expect(sig.amplitude).toBeGreaterThanOrEqual(0.5);
 			expect(sig.amplitude).toBeLessThanOrEqual(0.85);
-			expect(sig.frequency).toBeGreaterThanOrEqual(1);
-			expect(sig.frequency).toBeLessThanOrEqual(4.5);
+			expect(sig.frequency).toBeGreaterThanOrEqual(1.8);
+			expect(sig.frequency).toBeLessThanOrEqual(4.2);
 			expect(Number.isInteger(sig.waveCount)).toBe(true);
-			expect(sig.waveCount).toBeGreaterThanOrEqual(1);
+			expect(sig.waveCount).toBeGreaterThanOrEqual(2);
 			expect(sig.waveCount).toBeLessThanOrEqual(4);
 		}
 	});
@@ -114,7 +121,25 @@ describe('pokeWave1D', () => {
 	});
 });
 
+describe('waveformPokeAmount', () => {
+	// Prototype: "var amount = Math.min(0.55, strength * 0.06); /* A dent in
+	// the line, not a spike that slams it into the frame. */" — ported
+	// verbatim.
+	it('scales a moderate strength linearly by 0.06', () => {
+		expect(waveformPokeAmount(4)).toBeCloseTo(0.24);
+	});
+
+	it('caps at 0.55 regardless of how large the strength gets', () => {
+		expect(waveformPokeAmount(10)).toBe(0.55);
+		expect(waveformPokeAmount(500)).toBe(0.55);
+	});
+});
+
 describe('stepWave1D', () => {
+	// Coordinator correction (approved header prototype port): "this scheme
+	// decays by sqrt(damping) per step, not by damping, so 0.74 is what gives
+	// ~0.86/step: a poke is gone in about a second" — the prototype's own
+	// tuned default, replacing the 2D ripple's slower 0.94.
 	it('computes each interior cell as (neighbor average * 0.5 - previous) * damping', () => {
 		const size = 3;
 		const current = new Float32Array(3);
@@ -124,7 +149,7 @@ describe('stepWave1D', () => {
 		previous[1] = 1;
 
 		const { next, prev } = stepWave1D(size, current, previous);
-		const expected = ((4 + 2) * 0.5 - 1) * 0.94;
+		const expected = ((4 + 2) * 0.5 - 1) * 0.74;
 		expect(next[1]).toBeCloseTo(expected);
 		expect(prev).toBe(current); // buffer swap: old "current" becomes the new "previous"
 	});
@@ -135,7 +160,19 @@ describe('stepWave1D', () => {
 		const previous = new Float32Array(3);
 		previous[1] = 2;
 		const { next } = stepWave1D(size, current, previous);
-		expect(next[1]).toBeCloseTo((0 - 2) * 0.94);
+		expect(next[1]).toBeCloseTo((0 - 2) * 0.74);
+	});
+
+	// Prototype: "the snap to zero below a threshold is what makes it
+	// actually stop instead of ringing on forever" — anything under 0.004
+	// hard-cuts to exactly 0, not just an ever-shrinking float.
+	it('hard-cuts any value below the 0.004 threshold to exactly zero, so it actually stops', () => {
+		const size = 3;
+		const current = new Float32Array(3);
+		const previous = new Float32Array(3);
+		previous[1] = 0.005; // (0 - 0.005) * 0.74 = -0.0037, under the threshold
+		const { next } = stepWave1D(size, current, previous);
+		expect(next[1]).toBe(0);
 	});
 
 	it('decays toward zero over a long run — a damped wave settles, it does not sustain forever', () => {
@@ -161,6 +198,38 @@ describe('stepWave1D', () => {
 		const { next } = stepWave1D(size, current, previous);
 		expect(next[0]).toBe(0);
 		expect(next[size - 1]).toBe(0);
+	});
+});
+
+describe('staticWaveformRows', () => {
+	it('is deterministic — the same seed and size always produce the same rows', () => {
+		const a = staticWaveformRows(60, 7, 'creditbay:20 → 600');
+		const b = staticWaveformRows(60, 7, 'creditbay:20 → 600');
+		expect(a).toEqual(b);
+	});
+
+	it('returns exactly `rows` lines, each `cols` characters wide', () => {
+		const rows = staticWaveformRows(40, 5, 'amd:~90%');
+		expect(rows).toHaveLength(5);
+		for (const line of rows) expect(line).toHaveLength(40);
+	});
+
+	it('produces a genuinely different trace for a different build (a static header must look like ITS build)', () => {
+		const creditbay = staticWaveformRows(60, 7, 'creditbay:20 → 600').join('\n');
+		const amd = staticWaveformRows(60, 7, 'amd:~90%').join('\n');
+		expect(creditbay).not.toBe(amd);
+	});
+
+	it('draws a connected stroke, not a dashed staircase (more glyphs than columns)', () => {
+		const rows = staticWaveformRows(60, 7, 'credit-brain:10');
+		const totalGlyphs = rows.join('').replaceAll(' ', '').length;
+		expect(totalGlyphs).toBeGreaterThan(60);
+	});
+
+	it('never renders a flat line — the trace reaches more than one row', () => {
+		const rows = staticWaveformRows(60, 7, 'opinion-corpus:100k+');
+		const rowsWithGlyphs = rows.filter((line) => line.trim().length > 0);
+		expect(rowsWithGlyphs.length).toBeGreaterThan(1);
 	});
 });
 

@@ -27,6 +27,8 @@ import {
 	pokeWave1D,
 	stepWave1D,
 	traceGlyph,
+	waveformPokeAmount,
+	DISPLAY_GAIN,
 	type WaveSignature
 } from '../fields/waveform';
 import { clamp, clamp01 } from '../fields/math';
@@ -40,12 +42,12 @@ import {
 } from '../runtime/char-grid';
 import type { Engine } from '../runtime/canvas-action';
 
-/** The strip's own fixed row count — a few rows of vertical travel is
- * enough for a legible trace without ever competing with the timeline
- * beneath it for visual weight (owner rule). Coordinator correction round 2:
- * bumped from 5 to 7 for a smoother-looking curve now that the trace fills
- * every row between two columns instead of leaving gaps. */
-const ROWS = 7;
+/** A sane floor so a not-yet-laid-out or degenerate-height canvas still gets
+ * a few rows of vertical travel — the real row count now tracks the actual
+ * canvas height (approved header prototype port: the waveform fills the
+ * WHOLE header banner, not a fixed strip below it), so this is a minimum,
+ * not the row count itself. */
+const MIN_ROWS = 5;
 const FONT_PX = 11;
 const REDUCED_SEED_T = 3;
 /** Deliberately slow — "at most a slow ambient drift" (owner rule): the
@@ -54,12 +56,6 @@ const REDUCED_SEED_T = 3;
 const AMBIENT_DRIFT_SPEED = 0.12;
 /** The default, calm signature shown before any build has been hovered/focused. */
 const DEFAULT_SIGNATURE: WaveSignature = deriveWaveSignature('default');
-/** Coordinator correction round 2: "give it real amplitude (use most of the
- * strip's height)" — a signature's own raw amplitude (0.2-0.85, see
- * `fields/waveform.ts`) rarely reaches the strip's full +-1 row range on its
- * own; this boosts the displayed height so even a calm/default signature
- * visibly travels most of the strip, not just its middle third. */
-const DISPLAY_GAIN = 1.35;
 
 export interface WaveformEngineOptions {
 	canvas: HTMLCanvasElement;
@@ -80,6 +76,7 @@ export class WaveformEngine implements Engine {
 	private cw = 7;
 	private ch = 14;
 	private cols = 0;
+	private rows = MIN_ROWS;
 
 	private signature: WaveSignature = DEFAULT_SIGNATURE;
 	private ripple: { current: Float32Array; previous: Float32Array } | null = null;
@@ -134,25 +131,30 @@ export class WaveformEngine implements Engine {
 			dpr: devicePixelRatioCapped(),
 			fontPx: FONT_PX,
 			fontFamily: MONO_FONT_NAME,
-			minRows: ROWS
+			minRows: MIN_ROWS
 		});
 		if (!layout) return;
 		this.width = layout.width;
 		this.height = layout.height;
 		this.cw = layout.cw;
 		this.ch = layout.ch;
+		this.rows = layout.rows;
 		if (layout.cols !== this.cols) {
 			this.cols = layout.cols;
 			this.ripple = this.reduced ? null : this.freshRippleBuffer();
 		}
 	}
 
-	/** Adds ripple energy at a pointer/touch X position, in canvas-local client coordinates. */
+	/** Adds ripple energy at a pointer/touch X position, in canvas-local client
+	 * coordinates. `strength` is a raw pointer-speed value (see
+	 * `actions/waveform.ts`) — softened through `waveformPokeAmount` before it
+	 * reaches the buffer, so even an extreme drag stays "a dent in the line,
+	 * not a spike that slams it into the frame" (owner-approved prototype). */
 	poke(clientX: number, strength: number): void {
 		if (this.reduced || !this.ripple || !this.cols) return;
 		const rect = this.canvas.getBoundingClientRect();
 		const cellX = Math.floor((clientX - rect.left) / this.cw);
-		pokeWave1D(this.ripple.current, this.cols, cellX, strength);
+		pokeWave1D(this.ripple.current, this.cols, cellX, waveformPokeAmount(strength));
 	}
 
 	draw(now: number): void {
@@ -171,7 +173,7 @@ export class WaveformEngine implements Engine {
 		};
 		const rowAt = (col: number): number => {
 			const h = heightAt(col);
-			return Math.round(clamp01((1 - h) / 2) * (ROWS - 1));
+			return Math.round(clamp01((1 - h) / 2) * (this.rows - 1));
 		};
 
 		const { pc } = colorsForSection(this.section);
@@ -181,10 +183,10 @@ export class WaveformEngine implements Engine {
 		ctx.clearRect(0, 0, this.width, this.height);
 		ctx.textBaseline = 'top';
 
-		drawCharGrid(ctx, this.cols, ROWS, this.ch, (x, y) => {
+		drawCharGrid(ctx, this.cols, this.rows, this.ch, (x, y) => {
 			const row = rowAt(x);
 			const prevRow = x > 0 ? rowAt(x - 1) : row;
-			const glyph = traceGlyph(row, prevRow, y, ROWS);
+			const glyph = traceGlyph(row, prevRow, y, this.rows);
 			return glyph ? { glyph, color } : null;
 		});
 	}
