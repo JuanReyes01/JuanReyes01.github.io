@@ -7,7 +7,7 @@
 	import SeoHead from '$lib/components/SeoHead.svelte';
 	import { waveform as waveformAction } from '$lib/motion/actions/waveform';
 	import type { WaveformActionHandle } from '$lib/motion/actions/waveform';
-	import { deriveWaveSignature } from '$lib/motion/fields/waveform';
+	import { deriveWaveSignature, deriveBuildPalette } from '$lib/motion/fields/waveform';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
@@ -26,7 +26,9 @@
 	// shared action's own listeners, same interaction as /work/.
 	function mountWaveform(node: HTMLCanvasElement) {
 		waveHandle = waveformAction(node, { section: 'work' });
-		waveHandle.setSignature(deriveWaveSignature(`${data.slug}:${data.metric.value}`));
+		const seed = `${data.slug}:${data.metric.value}`;
+		waveHandle.setSignature(deriveWaveSignature(seed));
+		waveHandle.setPalette(deriveBuildPalette(seed));
 		return {
 			destroy() {
 				waveHandle?.destroy();

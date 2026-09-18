@@ -93,6 +93,41 @@ describe('createWaveformAction', () => {
 		expect(() => handle.resetSignature()).not.toThrow();
 	});
 
+	it('exposes setPalette() on the handle, forwarding to the engine', async () => {
+		const setPaletteSpy = vi.spyOn(WaveformEngine.prototype, 'setPalette');
+		const canvas = fakeCanvas();
+		const attach = createWaveformAction(fakeDeps());
+		const handle = attach(canvas, { section: 'work' });
+		await Promise.resolve();
+		await Promise.resolve();
+
+		const pair: ['cyan', 'blue'] = ['cyan', 'blue'];
+		handle.setPalette(pair);
+		expect(setPaletteSpy).toHaveBeenCalledWith(pair);
+		setPaletteSpy.mockRestore();
+	});
+
+	it('exposes resetPalette() on the handle, forwarding to the engine', async () => {
+		const resetPaletteSpy = vi.spyOn(WaveformEngine.prototype, 'resetPalette');
+		const canvas = fakeCanvas();
+		const attach = createWaveformAction(fakeDeps());
+		const handle = attach(canvas, { section: 'work' });
+		await Promise.resolve();
+		await Promise.resolve();
+
+		handle.resetPalette();
+		expect(resetPaletteSpy).toHaveBeenCalled();
+		resetPaletteSpy.mockRestore();
+	});
+
+	it('setPalette()/resetPalette() before the engine exists (fonts still loading) do not throw', () => {
+		const canvas = fakeCanvas();
+		const attach = createWaveformAction(fakeDeps());
+		const handle = attach(canvas, { section: 'work' });
+		expect(() => handle.setPalette(['cyan', 'blue'])).not.toThrow();
+		expect(() => handle.resetPalette()).not.toThrow();
+	});
+
 	it('destroy() detaches the pointer/touch listeners', async () => {
 		const pokeSpy = vi.spyOn(WaveformEngine.prototype, 'poke');
 		const canvas = fakeCanvas();
