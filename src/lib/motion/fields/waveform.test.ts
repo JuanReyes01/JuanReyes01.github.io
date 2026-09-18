@@ -4,7 +4,8 @@ import {
 	deriveWaveSignature,
 	sampleWaveform,
 	pokeWave1D,
-	stepWave1D
+	stepWave1D,
+	traceGlyph
 } from './waveform';
 
 describe('hashString', () => {
@@ -160,5 +161,46 @@ describe('stepWave1D', () => {
 		const { next } = stepWave1D(size, current, previous);
 		expect(next[0]).toBe(0);
 		expect(next[size - 1]).toBe(0);
+	});
+});
+
+describe('traceGlyph', () => {
+	const ROWS = 7;
+
+	it('skips a row outside the [prevRow, row] span (no glyph drawn there)', () => {
+		expect(traceGlyph(4, 2, 0, ROWS)).toBeNull();
+		expect(traceGlyph(4, 2, 6, ROWS)).toBeNull();
+	});
+
+	it('fills EVERY row of a multi-row jump — a continuous stroke, not a dashed staircase', () => {
+		// row=4, prevRow=1: the trace must draw something at y=1,2,3,4 (no gaps).
+		for (let y = 1; y <= 4; y++) {
+			expect(traceGlyph(4, 1, y, ROWS)).not.toBeNull();
+		}
+	});
+
+	it('uses "/" for a rising column-to-column move (row decreases — row 0 is the top)', () => {
+		expect(traceGlyph(2, 3, 2, ROWS)).toBe('/');
+		expect(traceGlyph(2, 3, 3, ROWS)).toBe('/');
+	});
+
+	it('uses "\\" for a falling column-to-column move (row increases)', () => {
+		expect(traceGlyph(3, 2, 2, ROWS)).toBe('\\');
+		expect(traceGlyph(3, 2, 3, ROWS)).toBe('\\');
+	});
+
+	it('uses "|" once the jump is steep enough to read as near-vertical, not a stretched diagonal', () => {
+		// A 4-row jump (well past the near-vertical threshold) at every row in the span.
+		expect(traceGlyph(5, 1, 3, ROWS)).toBe('|');
+	});
+
+	it('does NOT use "|" for a shallow one-row move (stays a diagonal)', () => {
+		expect(traceGlyph(2, 1, 1, ROWS)).not.toBe('|');
+	});
+
+	it('uses a contextual flat glyph — "‾" at the very top row, "_" at the very bottom, "-" elsewhere', () => {
+		expect(traceGlyph(0, 0, 0, ROWS)).toBe('‾');
+		expect(traceGlyph(ROWS - 1, ROWS - 1, ROWS - 1, ROWS)).toBe('_');
+		expect(traceGlyph(3, 3, 3, ROWS)).toBe('-');
 	});
 });

@@ -5,10 +5,14 @@
  * ripple), and hovering or focusing a build row changes its signature
  * deterministically." Renders as a single traced line (an oscilloscope-style
  * strip, not a filled character field like Sky/Band/HeaderField) through the
- * shared `runtime/char-grid.ts` renderer — exactly one glyph per column, its
- * row chosen by the wave's height at that column and its glyph chosen by
- * the local slope (`/` rising, `\` falling, `-` flat), so it reads as a
- * drawn line rather than a blob.
+ * shared `runtime/char-grid.ts` renderer. Each column's row is chosen by the
+ * wave's height there; when adjacent columns land on different rows, EVERY
+ * row between them is filled at that column with a connecting glyph (a
+ * classic ASCII line-plot technique) so the trace reads as one continuous
+ * stroke instead of a dashed staircase — `/`/`\` for a moderate rise/fall,
+ * `|` only once the jump is steep enough to read as near-vertical, and
+ * `_`/`-`/`‾` for flat runs (chosen by the row's own position — bottom,
+ * middle, top — so a flat trough/crest doesn't read as a plain flat line).
  *
  * Owner rule: "It must stay subtle: animate on interaction (and at most a
  * slow ambient drift), never competing with the timeline." This engine
@@ -22,6 +26,7 @@ import {
 	sampleWaveform,
 	pokeWave1D,
 	stepWave1D,
+	traceGlyph,
 	type WaveSignature
 } from '../fields/waveform';
 import { clamp, clamp01 } from '../fields/math';
@@ -37,8 +42,10 @@ import type { Engine } from '../runtime/canvas-action';
 
 /** The strip's own fixed row count — a few rows of vertical travel is
  * enough for a legible trace without ever competing with the timeline
- * beneath it for visual weight (owner rule). */
-const ROWS = 5;
+ * beneath it for visual weight (owner rule). Coordinator correction round 2:
+ * bumped from 5 to 7 for a smoother-looking curve now that the trace fills
+ * every row between two columns instead of leaving gaps. */
+const ROWS = 7;
 const FONT_PX = 11;
 const REDUCED_SEED_T = 3;
 /** Deliberately slow — "at most a slow ambient drift" (owner rule): the
@@ -47,10 +54,12 @@ const REDUCED_SEED_T = 3;
 const AMBIENT_DRIFT_SPEED = 0.12;
 /** The default, calm signature shown before any build has been hovered/focused. */
 const DEFAULT_SIGNATURE: WaveSignature = deriveWaveSignature('default');
-/** Minimum slope (in whole row units between adjacent columns — `row` is
- * always an integer) to trace a directional edge (`/` or `\`) instead of
- * the flat `-` glyph. */
-const SLOPE_EDGE_THRESHOLD = 1;
+/** Coordinator correction round 2: "give it real amplitude (use most of the
+ * strip's height)" — a signature's own raw amplitude (0.2-0.85, see
+ * `fields/waveform.ts`) rarely reaches the strip's full +-1 row range on its
+ * own; this boosts the displayed height so even a calm/default signature
+ * visibly travels most of the strip, not just its middle third. */
+const DISPLAY_GAIN = 1.35;
 
 export interface WaveformEngineOptions {
 	canvas: HTMLCanvasElement;
@@ -158,7 +167,7 @@ export class WaveformEngine implements Engine {
 			const xn = this.cols > 1 ? col / (this.cols - 1) : 0;
 			const base = sampleWaveform(xn, this.signature, t);
 			const displaced = this.ripple ? base + this.ripple.current[col] * 0.5 : base;
-			return clamp(displaced, -1, 1);
+			return clamp(displaced * DISPLAY_GAIN, -1, 1);
 		};
 		const rowAt = (col: number): number => {
 			const h = heightAt(col);
@@ -174,15 +183,9 @@ export class WaveformEngine implements Engine {
 
 		drawCharGrid(ctx, this.cols, ROWS, this.ch, (x, y) => {
 			const row = rowAt(x);
-			if (y !== row) return null;
 			const prevRow = x > 0 ? rowAt(x - 1) : row;
-			// Row 0 is the TOP (height +1), so a decreasing row number means
-			// the wave is RISING between these two columns.
-			const slope = row - prevRow;
-			let glyph = '-';
-			if (slope <= -SLOPE_EDGE_THRESHOLD) glyph = '/';
-			else if (slope >= SLOPE_EDGE_THRESHOLD) glyph = '\\';
-			return { glyph, color };
+			const glyph = traceGlyph(row, prevRow, y, ROWS);
+			return glyph ? { glyph, color } : null;
 		});
 	}
 }
