@@ -12,6 +12,7 @@
 	 */
 	import Figlet from './Figlet.svelte';
 	import { staticFieldRows } from '$lib/motion/fields/static-field';
+	import { staticWaveformRows } from '$lib/motion/fields/waveform';
 
 	// No JS means no real layout measurement (unlike the canvas headers,
 	// which size themselves from the actual rendered box) — these defaults
@@ -19,9 +20,31 @@
 	// `.field` font size below (~4.8px/char, ~9.2px/line); narrower
 	// viewports simply crop the excess via `overflow: hidden`, same as any
 	// other decorative background.
-	let { art, cols = 236, rows = 32 }: { art: string; cols?: number; rows?: number } = $props();
+	let {
+		art,
+		cols = 236,
+		rows = 32,
+		variant = 'field',
+		seed
+	}: {
+		art: string;
+		cols?: number;
+		rows?: number;
+		/** `wave` gives `/work/[slug]/`'s zero-JS header the same waveform
+		    identity the live `/work/` page has (approved header prototype
+		    port, requirement 5), instead of the generic ambient cloud field
+		    every other static header uses. Requires `seed`. */
+		variant?: 'field' | 'wave';
+		/** Seed text for `variant="wave"` — same `${slug}:${metric.value}`
+		    shape `/work/`'s own build rows pass to `deriveWaveSignature`. */
+		seed?: string;
+	} = $props();
 
-	const fieldText = $derived(staticFieldRows(cols, rows).join('\n'));
+	const fieldText = $derived(
+		variant === 'wave' && seed
+			? staticWaveformRows(cols, rows, seed).join('\n')
+			: staticFieldRows(cols, rows).join('\n')
+	);
 </script>
 
 <div class="ascii-header">

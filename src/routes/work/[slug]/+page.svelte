@@ -36,7 +36,10 @@
 	headingLevel={1}
 >
 	{#snippet head()}
-		<StaticAsciiHeader art={FIG} />
+		<!-- Approved header prototype port, requirement 5: this zero-JS case
+		     study gets a static trace of ITS OWN build's waveform (same seed
+		     shape as /work/'s own live rows), not the generic ambient field. -->
+		<StaticAsciiHeader art={FIG} variant="wave" seed="{data.slug}:{data.metric.value}" />
 	{/snippet}
 
 	<p class="summary">{data.summary}</p>
