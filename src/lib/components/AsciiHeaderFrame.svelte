@@ -5,7 +5,7 @@
 	 * is "a full-bleed field of characters with the name set in a large
 	 * figlet overlaid on it and a pointer ripple running through the
 	 * glyphs." Each page supplies its OWN canvas (wired to its own engine —
-	 * `SkyEngine` for home, `BandEngine` for field, `HeaderFieldEngine` for
+	 * `SkyEngine` for home, `BandEngine` for field, `WaveformEngine` for
 	 * work) as the `canvas` snippet; this component only owns the shared
 	 * layout: the canvas fills the frame, the figlet title sits large and
 	 * centered on top of it, `pointer-events: none` on the title so the

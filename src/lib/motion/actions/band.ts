@@ -2,8 +2,8 @@
  * The field page's iridescent band action (design motion table "Band
  * /field"; owner decision `site/v2-direction` slice S3, item B: every
  * full-bleed header — this band IS `/field/`'s header now — gets "the
- * pointer/touch ripple"). Like `actions/header-field.ts`, the header's
- * figlet overlay sits on top of the canvas with `pointer-events: none`, so
+ * pointer/touch ripple"). Like `actions/waveform.ts`, the header's figlet
+ * overlay sits on top of the canvas with `pointer-events: none`, so
  * listeners attach directly to the canvas node — no separate host element.
  */
 import { createCanvasAction, type CanvasActionDeps } from '../runtime/canvas-action';

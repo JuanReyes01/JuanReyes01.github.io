@@ -5,7 +5,6 @@
 	import Metric from '$lib/components/Metric.svelte';
 	import AsciiHeaderFrame from '$lib/components/AsciiHeaderFrame.svelte';
 	import SeoHead from '$lib/components/SeoHead.svelte';
-	import { headerField } from '$lib/motion/actions/header-field';
 	import { timeline as timelineAction } from '$lib/motion/actions/timeline';
 	import type { TimelineActionHandle } from '$lib/motion/actions/timeline';
 	import { waveform as waveformAction } from '$lib/motion/actions/waveform';
@@ -43,8 +42,17 @@
 		readout = next;
 	}
 
+	// Owner-approved header prototype port: the waveform IS the work header
+	// now (no separate ambient field behind it) — the first build is its
+	// resting signature both on load and whenever a row stops being
+	// hovered/focused (prototype: "hovering or focusing a build row changes
+	// its signature... leaving returns to the default", mirrored here by
+	// mapping "default" to build 1 specifically instead of a generic seed).
+	const defaultBuild = $derived(data.builds[0]);
+
 	function mountWaveform(node: HTMLCanvasElement) {
 		waveHandle = waveformAction(node, { section: 'work' });
+		if (defaultBuild) focusBuildWave(defaultBuild);
 		return {
 			destroy() {
 				waveHandle?.destroy();
@@ -104,17 +112,14 @@
 	headingLevel={1}
 >
 	{#snippet head()}
+		<!-- Owner-approved header prototype: "the waveform is the
+		     protagonist" — it IS the header's own full-bleed field now, not a
+		     separate ambient texture with a thin strip added beside it. -->
 		<AsciiHeaderFrame art={FIG}>
 			{#snippet canvas()}
-				<canvas use:headerField={{ section: 'work' }}></canvas>
+				<canvas aria-hidden="true" use:mountWaveform></canvas>
 			{/snippet}
 		</AsciiHeaderFrame>
-		<!-- owner decision site/v2-direction slice S3, item D: an ASCII
-		     waveform next to the work header field — the metaphor for the
-		     voice-agent calls behind these builds. -->
-		<figure class="wave-strip">
-			<canvas aria-hidden="true" use:mountWaveform></canvas>
-		</figure>
 	{/snippet}
 
 	<div class="tl">
@@ -193,7 +198,7 @@
 				}}
 				ondeactivate={() => {
 					if (build.lane) handle?.focusLane(null);
-					waveHandle?.resetSignature();
+					if (defaultBuild) focusBuildWave(defaultBuild);
 				}}
 			>
 				{#snippet aside()}<Metric value={build.metric.value} label={build.metric.label} />{/snippet}
@@ -203,19 +208,6 @@
 </Pane>
 
 <style>
-	.wave-strip {
-		margin: 10px 0 0;
-		height: 56px;
-		border: 1px solid var(--line);
-		border-radius: 4px;
-		background: var(--banner);
-		overflow: hidden;
-	}
-	.wave-strip canvas {
-		display: block;
-		width: 100%;
-		height: 100%;
-	}
 	.tl {
 		margin-top: 10px;
 	}
