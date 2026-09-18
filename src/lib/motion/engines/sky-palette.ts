@@ -56,6 +56,8 @@ export function resolveSkyColor(key: SkyColorKey, tokens: Tokens): string {
 			return tokens.yellow;
 		case 'stem':
 			return tokenRgba(tokens.green, 0.72);
+		case 'leaf':
+			return tokenRgba(tokens.green, 0.68);
 		case 'eye':
 			// Never actually drawn — the engine skips `eye` cells (a hole in the head).
 			return tokens.bg;

@@ -1,15 +1,15 @@
 <script lang="ts">
 	/**
-	 * The shared full-bleed ASCII header shell for every HYDRATED page (owner
-	 * decision `site/v2-direction` slice S3, item B): the reference artifact
-	 * is "a full-bleed field of characters with the name set in a large
-	 * figlet overlaid on it and a pointer ripple running through the
-	 * glyphs." Each page supplies its OWN canvas (wired to its own engine —
+	 * The shared full-bleed ASCII header shell for every HYDRATED page
+	 * (approved header prototype, studies 2 & 3 — work/field: a full-bleed
+	 * field of characters with a SMALL figlet title card top-left over a
+	 * veil, pointer/touch ripple running through the glyphs underneath).
+	 * Each page supplies its OWN canvas (wired to its own engine —
 	 * `SkyEngine` for home, `BandEngine` for field, `WaveformEngine` for
 	 * work) as the `canvas` snippet; this component only owns the shared
-	 * layout: the canvas fills the frame, the figlet title sits large and
-	 * centered on top of it, `pointer-events: none` on the title so the
-	 * canvas underneath still receives the pointer/touch ripple.
+	 * layout: the canvas fills the frame, the title card sits top-left over
+	 * it, `pointer-events: none` on the title so the canvas underneath still
+	 * receives the pointer/touch ripple.
 	 */
 	import type { Snippet } from 'svelte';
 	import Figlet from './Figlet.svelte';
@@ -54,45 +54,24 @@
 		padding: 5% 6%;
 		pointer-events: none;
 	}
-	/* Coordinator correction (site/v2-direction slice S3, apply-fix round
-	   1): a full-size figlet (Figlet's own default, tuned for the small
-	   number of home's hero-figlet characters) spans nearly the whole
-	   header width at this font size, leaving the bird on /field/ nowhere
-	   to be "the star" without the title's veil covering it. A smaller,
-	   corner-anchored title (top-left, like a title card) leaves the rest
-	   of the frame free for the field's own protagonist (the bird on
-	   /field/, the header field's texture on /work/). */
+	/* Approved header prototype: a genuinely SMALL title card (9-15px, in
+	   absolute px, not rem) — ported verbatim from the prototype's own
+	   `.fig` rule. A rem-based clamp still reads as "a small banner" next to
+	   a five-letter figlet's inherent width (each letter is several
+	   monospace columns); this is small enough that the field itself (the
+	   bird on /field/, the wave on /work/) is unmistakably the frame's own
+	   protagonist, with the title reading as a corner label. */
 	.title-veil :global(.fig) {
-		font-size: clamp(0.85rem, 0.5rem + 1.8vw, 1.7rem);
+		font-size: clamp(9px, 1.4vw, 15px);
+		font-weight: 700;
 	}
-	/* Coordinator correction (site/v2-direction slice S3, apply-fix round
-	   1): "the big title must NOT be composited into the character field...
-	   keep the figlet as crisp TEXT sitting on top of the field... with
-	   enough contrast (a veil or a text shadow) to stay readable in both
-	   themes." A radial veil (the same --veil token the home hero's own
-	   text panel uses) sits behind the title only, fading out at its edges
-	   so the field is still visible everywhere else. */
+	/* Prototype `.title-card`: a solid veil panel with a thin section-tinted
+	   border, not a radial fade — at this small a size the title reads as an
+	   actual card, not a watermark that needs to fade into the field. */
 	.title-veil {
-		padding: 14px 26px;
-		border-radius: 8px;
-		background: radial-gradient(
-			ellipse at center,
-			var(--veil) 0%,
-			var(--veil) 55%,
-			transparent 100%
-		);
-	}
-	/* A 5-letter figlet word is inherently wide (each letter is several
-	   monospace columns) — at narrow (mobile) widths, `clamp()`'s own rem
-	   floor above still spans nearly the full frame, leaving the header's
-	   OTHER protagonist (the bird on /field/) no room at all. Shrink harder
-	   here specifically. */
-	@media (max-width: 480px) {
-		.title-veil :global(.fig) {
-			font-size: 0.5rem;
-		}
-		.title-veil {
-			padding: 8px 14px;
-		}
+		padding: 10px 14px;
+		border-radius: 4px;
+		border: 1px solid color-mix(in srgb, var(--pc, var(--cyan)) 28%, var(--line));
+		background: var(--veil);
 	}
 </style>

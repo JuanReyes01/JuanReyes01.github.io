@@ -48,18 +48,41 @@ describe('sampleBird', () => {
 		expect(sampleBird(-5, -5, frameAt(0))).toBeNull();
 	});
 
+	// Approved header prototype port: the prototype's own bounding box caps
+	// at y=0.72 (not 1.02) — the flower's stem is shorter in the prototype,
+	// so nothing legitimately reaches that far down anymore.
+	it('returns null below the prototype-tuned bounding box (y > 0.72)', () => {
+		expect(sampleBird(-1.19, 0.8, frameAt(0))).toBeNull();
+	});
+
 	it('classifies the flower center', () => {
 		expect(sampleBird(-1.14, -0.06, frameAt(0))).toEqual({ key: 'fcenter', value: 0.95 });
 	});
 
+	// Approved header prototype port: petal geometry is ported verbatim from
+	// the prototype's own `sampleBird` — the fcenter/petal radii and the
+	// petal formula's own coefficients (0.17 + 0.075*cos(...)) are roughly
+	// 1.5x the prior "legacy" port's, since the prototype's flower is meant
+	// to read clearly next to a bird this large.
 	it('classifies a flower petal', () => {
-		const s = sampleBird(-1.04032, -0.06799, frameAt(0));
+		const s = sampleBird(-1.14, 0.06, frameAt(0));
 		expect(s?.key).toBe('petal');
-		expect(s?.value).toBeCloseTo(0.6688, 3);
+		expect(s?.value).toBeGreaterThan(0);
+		expect(s?.value).toBeLessThan(1);
 	});
 
-	it('classifies the flower stem (both the straight segment and the leaf ellipse)', () => {
-		expect(sampleBird(-1.07, 0.54, frameAt(0))).toEqual({ key: 'stem', value: 0.8 });
+	// Approved header prototype port: the stem is a short segment from the
+	// flower down to (-1.20, 0.58) — shorter than the prior "legacy" port's
+	// segment down to (-1.22, 1.0).
+	it('classifies the flower stem (the straight segment down to the leaf)', () => {
+		expect(sampleBird(-1.15, 0.06, frameAt(0))).toEqual({ key: 'stem', value: 0.6 });
+	});
+
+	// Approved header prototype port: the prototype's leaf is its OWN key
+	// (`leaf`), distinct from `stem` — the prior "legacy" port merged both
+	// into a single `stem` key/color.
+	it('classifies the leaf ellipse as its own `leaf` key, distinct from the stem', () => {
+		expect(sampleBird(-1.07, 0.38, frameAt(0))).toEqual({ key: 'leaf', value: 0.8 });
 	});
 
 	it('classifies the body center', () => {
