@@ -144,23 +144,22 @@ describe('SkyEngine', () => {
 		expect(() => engine.draw(0)).not.toThrow();
 	});
 
-	// design #4938 item 6: "the theme is ASCII ART, but super advanced" —
-	// the cloud field must trace its shapes with directional edge glyphs
-	// (`- | / \`), not just a flat brightness -> density ramp, while flat
-	// interiors keep the density ramp (no noisy edge glyphs everywhere).
-	it('paints directional edge glyphs at cloud boundaries, not just density-ramp characters', () => {
+	// Owner correction (site/v2-direction slice S3, apply-fix round 1):
+	// "applying pickGlyph's edge tracing to the ambient cloud/iridescent
+	// field invents a direction in every cell... Rule: ambient fields use
+	// the density ramp only." Supersedes the earlier #4938 item 6 approach
+	// (directional edge glyphs on the cloud field itself) — the hero's
+	// large figlet title sits on TOP of this field as HTML text, and
+	// directional noise running through the field made it illegible.
+	it('never paints a directional edge glyph in the ambient cloud field — density ramp only', () => {
 		const { canvas, drawn } = fakeCanvasCapturingText(1200, 400);
 		const engine = new SkyEngine({ canvas, tokens: TOKENS, reduced: false });
 		engine.resize();
 		engine.draw(0);
 		const allChars = drawn.join('');
-		// `|`, `/`, `\` are NOT part of the legacy density ramp (` .·:-=+*#%@`
-		// already contains `-`), so finding any of them proves real
-		// directional-glyph selection kicked in, not just a density lookup.
 		const edgeGlyphs = [...allChars].filter((c) => '|/\\'.includes(c));
-		expect(edgeGlyphs.length).toBeGreaterThan(0);
-		// Interiors must still fall back to the density ramp somewhere — the
-		// upgrade traces edges, it doesn't turn the whole field into edges.
+		expect(edgeGlyphs.length).toBe(0);
+		// It still paints real texture, not nothing.
 		const densityGlyphs = [...allChars].filter((c) => '.·:=+*#%@'.includes(c));
 		expect(densityGlyphs.length).toBeGreaterThan(0);
 	});
