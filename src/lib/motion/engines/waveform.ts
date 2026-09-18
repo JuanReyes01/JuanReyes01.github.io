@@ -1,0 +1,188 @@
+/**
+ * The per-build ASCII waveform strip on `/work/` (owner decision
+ * `site/v2-direction` slice S3, item D): "an ASCII waveform in/next to the
+ * work header field. The pointer deforms it (1D damped wave, like the hero
+ * ripple), and hovering or focusing a build row changes its signature
+ * deterministically." Renders as a single traced line (an oscilloscope-style
+ * strip, not a filled character field like Sky/Band/HeaderField) through the
+ * shared `runtime/char-grid.ts` renderer — exactly one glyph per column, its
+ * row chosen by the wave's height at that column and its glyph chosen by
+ * the local slope (`/` rising, `\` falling, `-` flat), so it reads as a
+ * drawn line rather than a blob.
+ *
+ * Owner rule: "It must stay subtle: animate on interaction (and at most a
+ * slow ambient drift), never competing with the timeline." This engine
+ * never fully settles while visible (same as every other ambient field
+ * here), but its own time multiplier is deliberately slow (see
+ * `AMBIENT_DRIFT_SPEED`) so the idle drift stays calm; reduced motion still
+ * renders one static frame like every other engine.
+ */
+import {
+	deriveWaveSignature,
+	sampleWaveform,
+	pokeWave1D,
+	stepWave1D,
+	type WaveSignature
+} from '../fields/waveform';
+import { clamp, clamp01 } from '../fields/math';
+import { tokenRgba, type Tokens } from '../runtime/tokens';
+import { colorsForSection, type Section } from '../../site';
+import {
+	drawCharGrid,
+	layoutCharGrid,
+	devicePixelRatioCapped,
+	MONO_FONT_NAME
+} from '../runtime/char-grid';
+import type { Engine } from '../runtime/canvas-action';
+
+/** The strip's own fixed row count — a few rows of vertical travel is
+ * enough for a legible trace without ever competing with the timeline
+ * beneath it for visual weight (owner rule). */
+const ROWS = 5;
+const FONT_PX = 11;
+const REDUCED_SEED_T = 3;
+/** Deliberately slow — "at most a slow ambient drift" (owner rule): the
+ * strip is always technically animating while visible (never `isSettled()`),
+ * but this keeps the idle motion calm rather than lively. */
+const AMBIENT_DRIFT_SPEED = 0.12;
+/** The default, calm signature shown before any build has been hovered/focused. */
+const DEFAULT_SIGNATURE: WaveSignature = deriveWaveSignature('default');
+/** Minimum slope (in whole row units between adjacent columns — `row` is
+ * always an integer) to trace a directional edge (`/` or `\`) instead of
+ * the flat `-` glyph. */
+const SLOPE_EDGE_THRESHOLD = 1;
+
+export interface WaveformEngineOptions {
+	canvas: HTMLCanvasElement;
+	tokens: Tokens;
+	reduced: boolean;
+	section: Section;
+}
+
+export class WaveformEngine implements Engine {
+	private readonly canvas: HTMLCanvasElement;
+	private readonly ctx: CanvasRenderingContext2D;
+	private tokens: Tokens;
+	private reduced: boolean;
+	private readonly section: Section;
+
+	private width = 0;
+	private height = 0;
+	private cw = 7;
+	private ch = 14;
+	private cols = 0;
+
+	private signature: WaveSignature = DEFAULT_SIGNATURE;
+	private ripple: { current: Float32Array; previous: Float32Array } | null = null;
+
+	constructor(opts: WaveformEngineOptions) {
+		this.canvas = opts.canvas;
+		this.ctx = this.canvas.getContext('2d') as CanvasRenderingContext2D;
+		this.tokens = opts.tokens;
+		this.reduced = opts.reduced;
+		this.section = opts.section;
+	}
+
+	setTheme(tokens: Tokens): void {
+		this.tokens = tokens;
+	}
+
+	setReduced(reduced: boolean): void {
+		this.reduced = reduced;
+		if (reduced) this.ripple = null;
+		else if (this.cols) this.ripple = this.freshRippleBuffer();
+	}
+
+	setVisibility(): void {}
+
+	isSettled(): boolean {
+		return this.reduced;
+	}
+
+	destroy(): void {}
+
+	/** Hovering/focusing a build row calls this (owner rule: "changes its
+	 * signature deterministically"). */
+	setSignature(signature: WaveSignature): void {
+		this.signature = signature;
+	}
+
+	/** Leaving/blurring a build row returns the strip to its calm default. */
+	resetSignature(): void {
+		this.signature = DEFAULT_SIGNATURE;
+	}
+
+	private freshRippleBuffer() {
+		return { current: new Float32Array(this.cols), previous: new Float32Array(this.cols) };
+	}
+
+	resize(): void {
+		const rect = this.canvas.getBoundingClientRect();
+		if (!rect.width) return;
+		const layout = layoutCharGrid({
+			canvas: this.canvas,
+			ctx: this.ctx,
+			dpr: devicePixelRatioCapped(),
+			fontPx: FONT_PX,
+			fontFamily: MONO_FONT_NAME,
+			minRows: ROWS
+		});
+		if (!layout) return;
+		this.width = layout.width;
+		this.height = layout.height;
+		this.cw = layout.cw;
+		this.ch = layout.ch;
+		if (layout.cols !== this.cols) {
+			this.cols = layout.cols;
+			this.ripple = this.reduced ? null : this.freshRippleBuffer();
+		}
+	}
+
+	/** Adds ripple energy at a pointer/touch X position, in canvas-local client coordinates. */
+	poke(clientX: number, strength: number): void {
+		if (this.reduced || !this.ripple || !this.cols) return;
+		const rect = this.canvas.getBoundingClientRect();
+		const cellX = Math.floor((clientX - rect.left) / this.cw);
+		pokeWave1D(this.ripple.current, this.cols, cellX, strength);
+	}
+
+	draw(now: number): void {
+		if (!this.cols) return;
+		const t = this.reduced ? REDUCED_SEED_T : REDUCED_SEED_T + (now / 1000) * AMBIENT_DRIFT_SPEED;
+		if (!this.reduced && this.ripple) {
+			const { next, prev } = stepWave1D(this.cols, this.ripple.current, this.ripple.previous);
+			this.ripple = { current: next, previous: prev };
+		}
+
+		const heightAt = (col: number): number => {
+			const xn = this.cols > 1 ? col / (this.cols - 1) : 0;
+			const base = sampleWaveform(xn, this.signature, t);
+			const displaced = this.ripple ? base + this.ripple.current[col] * 0.5 : base;
+			return clamp(displaced, -1, 1);
+		};
+		const rowAt = (col: number): number => {
+			const h = heightAt(col);
+			return Math.round(clamp01((1 - h) / 2) * (ROWS - 1));
+		};
+
+		const { pc } = colorsForSection(this.section);
+		const color = tokenRgba(this.tokens[pc as keyof Tokens], 0.85);
+
+		const ctx = this.ctx;
+		ctx.clearRect(0, 0, this.width, this.height);
+		ctx.textBaseline = 'top';
+
+		drawCharGrid(ctx, this.cols, ROWS, this.ch, (x, y) => {
+			const row = rowAt(x);
+			if (y !== row) return null;
+			const prevRow = x > 0 ? rowAt(x - 1) : row;
+			// Row 0 is the TOP (height +1), so a decreasing row number means
+			// the wave is RISING between these two columns.
+			const slope = row - prevRow;
+			let glyph = '-';
+			if (slope <= -SLOPE_EDGE_THRESHOLD) glyph = '/';
+			else if (slope >= SLOPE_EDGE_THRESHOLD) glyph = '\\';
+			return { glyph, color };
+		});
+	}
+}
