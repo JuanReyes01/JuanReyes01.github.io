@@ -5,9 +5,11 @@
  * hydrated page's header except home (home keeps `SkyEngine`'s own
  * distinctive multi-hue cloud palette, which already satisfies this — see
  * `engines/sky.ts`). Shares the exact same ambient cloud field + ripple math
- * as `SkyEngine` (`fields/clouds.ts`, `fields/ripple.ts`) and the same
- * directional-glyph tracing (`fields/glyphs.ts`), rendered through the
- * shared `runtime/char-grid.ts` renderer — but colors every cell with the
+ * as `SkyEngine` (`fields/clouds.ts`, `fields/ripple.ts`), rendered as
+ * density-ramp characters only through the shared `runtime/char-grid.ts`
+ * renderer (owner correction, apply-fix round 1: "ambient fields use the
+ * density ramp only" — no directional-edge tracing here, that's reserved
+ * for fields with a real shape) — but colors every cell with the
  * CURRENT section's own two accent tokens (`site.ts#colorsForSection`)
  * instead of Sky's fixed rainbow palette, so `/work/`'s header reads in
  * yellow/pink and `/field/`'s would read in green/cyan if it ever used this
@@ -18,7 +20,7 @@ import { sampleTexture, makeTexture } from '../fields/noise';
 import { cloudField } from '../fields/clouds';
 import { pokeRipple, stepRipple } from '../fields/ripple';
 import { clamp01 } from '../fields/math';
-import { pickGlyph, DENSITY_RAMP } from '../fields/glyphs';
+import { densityGlyph } from '../fields/glyphs';
 import { tokenRgba, type Tokens } from '../runtime/tokens';
 import { colorsForSection, type Section } from '../../site';
 import {
@@ -29,10 +31,6 @@ import {
 } from '../runtime/char-grid';
 import type { Engine } from '../runtime/canvas-action';
 
-/** Same tuning rationale as `SkyEngine`'s `EDGE_THRESHOLD` — low enough that
- * cloud silhouette boundaries pick up `- | / \`, high enough that gentle
- * internal shading doesn't turn into edge noise. */
-const EDGE_THRESHOLD = 0.16;
 const REDUCED_SEED_T = 6.4;
 
 export interface HeaderFieldEngineOptions {
@@ -149,25 +147,6 @@ export class HeaderFieldEngine implements Engine {
 		ctx.clearRect(0, 0, this.width, this.height);
 		ctx.textBaseline = 'top';
 
-		const cellField = (cx: number, cy: number): number => {
-			let fx = cx;
-			let fy = cy;
-			if (this.ripple && cx > 0 && cy > 0 && cx < this.cols - 1 && cy < this.rows - 1) {
-				const i = cy * this.cols + cx;
-				const r = this.ripple.current;
-				fx += (r[i + 1] - r[i - 1]) * 1.5;
-				fy += (r[i + this.cols] - r[i - this.cols]) * 1.5;
-			}
-			return cloudField(
-				(px, py) => sampleTexture(this.textureA, px, py),
-				(px, py) => sampleTexture(this.textureB, px, py),
-				fx * unitX,
-				fy * unitY,
-				t,
-				heightUnits
-			);
-		};
-
 		drawCharGrid(ctx, this.cols, this.rows, this.ch, (x, y) => {
 			let sx = x;
 			let sy = y;
@@ -189,10 +168,10 @@ export class HeaderFieldEngine implements Engine {
 					heightUnits
 				) + boost
 			);
-			const glyph = pickGlyph(cellField, x, y, value, {
-				edgeThreshold: EDGE_THRESHOLD,
-				ramp: DENSITY_RAMP
-			});
+			// Owner correction (apply-fix round 1): "ambient fields use the
+			// density ramp only" — this cloud field is procedural noise with
+			// no real, coherent shape to trace.
+			const glyph = densityGlyph(value);
 			if (glyph === ' ') return null;
 			// E4 (perf): exactly 4 discrete colors total (2 hues x 2 alpha
 			// levels), matching `SkyEngine`'s `c0`/`c1` bucketing — a

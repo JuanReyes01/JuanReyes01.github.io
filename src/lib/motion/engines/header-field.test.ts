@@ -115,13 +115,17 @@ describe('HeaderFieldEngine', () => {
 		}
 	});
 
-	it('traces field edges with directional glyphs and keeps flat interiors on the density ramp', () => {
+	// Owner correction (site/v2-direction slice S3, apply-fix round 1):
+	// "ambient fields use the density ramp only" — this cloud field is
+	// procedural noise with no real shape to trace, so it must never
+	// produce a directional edge glyph.
+	it('never traces a directional edge glyph — density ramp only', () => {
 		const { engine, drawn } = makeEngine('work', false, 1280, 260);
 		engine.draw(0);
 		const allChars = drawn.map((d) => d.text).join('');
 		const edgeGlyphs = [...allChars].filter((c) => '|/\\'.includes(c));
 		const densityGlyphs = [...allChars].filter((c) => '.·:=+*#%@'.includes(c));
-		expect(edgeGlyphs.length).toBeGreaterThan(0);
+		expect(edgeGlyphs.length).toBe(0);
 		expect(densityGlyphs.length).toBeGreaterThan(0);
 	});
 
