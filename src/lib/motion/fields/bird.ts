@@ -46,8 +46,11 @@ export interface BirdFrame {
 
 /**
  * The wingbeat pose at time `t` (owner rule: 1.1 Hz wingbeat, sway
- * `0.012*sin(t*0.5)`, bob `0.02*sin(t*0.8)`). Under reduced motion the bird
- * parks at the legacy's fixed `ph=0.9` pose with no sway/bob.
+ * `0.04*sin(t*0.5)`, bob `0.055*sin(t*0.8)` — medium-intensity port,
+ * owner-approved header prototype v5: sway/bob raised from 0.012/0.02 so the
+ * hover reads at real scale now that the bird is drawn much larger). The
+ * bird still stays in place and never follows the pointer; under reduced
+ * motion it parks at the legacy's fixed `ph=0.9` pose with no sway/bob.
  */
 export function computeBirdMotion(
 	t: number,
@@ -55,8 +58,8 @@ export function computeBirdMotion(
 ): Pick<BirdFrame, 'bx' | 'by' | 'ph'> {
 	if (reduced) return { bx: 0, by: 0, ph: 0.9 };
 	return {
-		bx: 0.012 * Math.sin(t * 0.5),
-		by: 0.02 * Math.sin(t * 0.8),
+		bx: 0.04 * Math.sin(t * 0.5),
+		by: 0.055 * Math.sin(t * 0.8),
 		ph: t * Math.PI * 2 * 1.1
 	};
 }

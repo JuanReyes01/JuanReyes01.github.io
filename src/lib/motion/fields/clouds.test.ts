@@ -25,7 +25,12 @@ describe('cloudField', () => {
 		]);
 	});
 
-	it('halves at the very top and bottom edges of the hero band (sin(0)=sin(PI)=0)', () => {
+	// Medium-intensity port (owner-approved header prototype v5): the vertical
+	// fade changed from `0.5 + 0.5*sin` to `0.88 + 0.12*sin`, so the top/bottom
+	// edges dim to 88% of the floor-adjusted peak instead of half of it —
+	// coverage stays close to full everywhere instead of thinning at the
+	// edges. 0.13 + 0.87*1*1*0.88 = 0.8956.
+	it('dims to ~90% (not 50%) at the very top and bottom edges of the hero band (sin(0)=sin(PI)=0)', () => {
 		expect(
 			cloudField(
 				() => 1,
@@ -35,7 +40,7 @@ describe('cloudField', () => {
 				0,
 				40
 			)
-		).toBeCloseTo(0.5, 5);
+		).toBeCloseTo(0.8956, 4);
 		expect(
 			cloudField(
 				() => 1,
@@ -45,7 +50,7 @@ describe('cloudField', () => {
 				0,
 				40
 			)
-		).toBeCloseTo(0.5, 5);
+		).toBeCloseTo(0.8956, 4);
 	});
 
 	it('peaks near the vertical midpoint of the hero band', () => {
@@ -81,7 +86,10 @@ describe('cloudField', () => {
 		expect(v).toBeLessThanOrEqual(1);
 	});
 
-	it('is zero below the 0.33-blend threshold, matching the legacy field', () => {
+	// Medium-intensity port: a density FLOOR (0.13 + 0.87*v²) replaces the old
+	// hard zero below the blend threshold, so no cell ever reads as fully
+	// blank — coverage approaches 100% instead of leaving gaps.
+	it('returns the density floor (0.13), not zero, below the 0.33-blend threshold', () => {
 		expect(
 			cloudField(
 				() => 0.3,
@@ -91,6 +99,6 @@ describe('cloudField', () => {
 				0,
 				40
 			)
-		).toBe(0);
+		).toBeCloseTo(0.13, 5);
 	});
 });

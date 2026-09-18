@@ -31,6 +31,13 @@ import type { Tokens } from '../runtime/tokens';
 /** The legacy engine's fixed reduced-motion pose ("Static frame (t=11.3)"). */
 const REDUCED_SEED_T = 11.3;
 
+/** Medium-intensity port (owner-approved header prototype v5): the ambient
+ * cloud field's own clock runs at this multiple of real time — the
+ * prototype's intensity control itself is not shipped, so "medium"
+ * (multiplier 1) is hard-coded as this single constant, ported verbatim from
+ * its own `FIELD_DRIFT`. */
+const FIELD_DRIFT = 2.2;
+
 export interface SkyEngineOptions {
 	canvas: HTMLCanvasElement;
 	tokens: Tokens;
@@ -126,7 +133,7 @@ export class SkyEngine implements Engine {
 
 	draw(now: number): void {
 		if (!this.cols) return;
-		const t = this.reduced ? REDUCED_SEED_T : REDUCED_SEED_T + now / 1000;
+		const t = this.reduced ? REDUCED_SEED_T : REDUCED_SEED_T + (now / 1000) * FIELD_DRIFT;
 		if (!this.reduced && this.ripple) {
 			const { next, prev } = stepRipple(
 				this.cols,

@@ -6,10 +6,18 @@
  * part and lives in `motion/actions/sky.ts`.
  */
 
+/** Medium-intensity port (owner-approved header prototype v5): every 2D
+ * pointer/touch ripple is scaled by this gain before landing in the buffer —
+ * ported verbatim from the prototype's own `RIPPLE_GAIN` (its intensity
+ * control itself is not shipped, so "medium", multiplier 1, is hard-coded as
+ * this single constant). */
+const RIPPLE_GAIN = 2.4;
+
 /**
  * Adds wave energy at `(cellX, cellY)` and its 8 neighbors (full strength at
  * the center, half strength around it), skipping any cell that would land
  * on the buffer's 1px border — mirrors the legacy bounds guard exactly.
+ * `strength` is gained by {@link RIPPLE_GAIN} before it's applied.
  */
 export function pokeRipple(
 	buffer: Float32Array,
@@ -19,12 +27,13 @@ export function pokeRipple(
 	cellY: number,
 	strength: number
 ): void {
+	const gained = strength * RIPPLE_GAIN;
 	for (let dy = -1; dy <= 1; dy++) {
 		for (let dx = -1; dx <= 1; dx++) {
 			const x = cellX + dx;
 			const y = cellY + dy;
 			if (x < 1 || y < 1 || x >= cols - 1 || y >= rows - 1) continue;
-			buffer[y * cols + x] += strength * (dx === 0 && dy === 0 ? 1 : 0.5);
+			buffer[y * cols + x] += gained * (dx === 0 && dy === 0 ? 1 : 0.5);
 		}
 	}
 }

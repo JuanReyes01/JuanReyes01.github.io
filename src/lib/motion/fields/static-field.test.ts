@@ -33,9 +33,15 @@ describe('staticFieldRows', () => {
 		expect(densityGlyphs.length).toBeGreaterThan(0);
 	});
 
-	it('leaves at least some cells blank (not a fully solid block of characters)', () => {
+	// Medium-intensity port (owner-approved header prototype v5): `cloudField`
+	// now carries a `0.13 + 0.87*v²` density floor, so no cell samples as
+	// fully empty anymore — coverage reads as ~100% (this static, zero-JS
+	// field reuses the exact same `cloudField` maths as the live hero, so it
+	// inherits the same floor). Superseded the old "leaves some cells blank"
+	// expectation, which described the pre-floor behavior.
+	it('never leaves a cell blank — the density floor guarantees near-full coverage', () => {
 		const text = staticFieldRows(90, 12).join('');
 		const blanks = [...text].filter((c) => c === ' ').length;
-		expect(blanks).toBeGreaterThan(0);
+		expect(blanks).toBe(0);
 	});
 });

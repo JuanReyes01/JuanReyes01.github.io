@@ -15,15 +15,18 @@ export type SkyColorKey = BirdPartKey | 'gorget2' | SkyAmbientKey;
 export function resolveSkyColor(key: SkyColorKey, tokens: Tokens): string {
 	switch (key) {
 		case 'c0':
-			return tokenRgba(tokens.cyan, 0.26);
+			// Medium-intensity port (owner-approved header prototype v5): the
+			// faint ambient tone is raised 0.26 -> 0.33 so it still reads as
+			// visible texture, not near-invisible.
+			return tokenRgba(tokens.cyan, 0.33);
 		case 'c1':
 			return tokenRgba(tokens.cyan, 0.6);
 		case 'b0':
-			return tokenRgba(tokens.blue, 0.26);
+			return tokenRgba(tokens.blue, 0.33);
 		case 'b1':
 			return tokenRgba(tokens.blue, 0.6);
 		case 'm0':
-			return tokenRgba(tokens.magenta, 0.26);
+			return tokenRgba(tokens.magenta, 0.33);
 		case 'm1':
 			return tokenRgba(tokens.magenta, 0.6);
 		case 'hotP':

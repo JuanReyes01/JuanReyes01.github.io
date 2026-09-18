@@ -19,5 +19,10 @@ export function cloudField(
 	const a = sampleA(X * 0.8 + t * 5, Y * 0.8);
 	const b = sampleB(X * 1.25 - t * 3, Y * 1.25 + t * 1.5);
 	const v = clamp01((a * 0.65 + b * 0.35 - 0.33) / 0.38);
-	return v * v * (0.5 + 0.5 * Math.sin(Math.PI * clamp01(Y / H)));
+	// Medium-intensity port (owner-approved header prototype v5): the vertical
+	// fade is now `0.88 + 0.12*sin` (was `0.5 + 0.5*sin`) so the top/bottom
+	// bands barely dim at all, and a `0.13 + 0.87*v²` floor guarantees every
+	// cell holds at least a faint glyph — coverage reads as ~100%, with the
+	// cloud shapes still carrying all the bright structure.
+	return 0.13 + 0.87 * v * v * (0.88 + 0.12 * Math.sin(Math.PI * clamp01(Y / H)));
 }

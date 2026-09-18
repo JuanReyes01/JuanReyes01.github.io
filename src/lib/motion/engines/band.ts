@@ -116,11 +116,26 @@ export function birdSpaceOf(
  */
 const BIRD_EDGE_THRESHOLD = 0.55;
 
-/** Owner correction (apply-fix round 1): "keep the ambient field quiet
- * behind it (lower contrast/density) so the bird reads instantly." Scales
- * the field's own density value down before the ramp lookup, so fewer
- * cells clear the density ramp's brighter characters. */
-const FIELD_DIM = 0.62;
+/** Medium-intensity port (owner-approved header prototype v5): the ambient
+ * field's own clock runs at this multiple of real time — same constant as
+ * `SkyEngine`'s own `FIELD_DRIFT`, applied ONLY to the background texture's
+ * time, never to the bird's own motion clock (see `draw()`: the bird stays
+ * at its calm, fixed 1.1 Hz wingbeat regardless of this). */
+const FIELD_DRIFT = 2.2;
+
+/** Medium-intensity port (owner-approved header prototype v5): replaces the
+ * old flat `FIELD_DIM` scalar with the prototype's own radial "clearing
+ * halo" — within `HALO_START` bird-scales of the bird's anchor the ambient
+ * field is fully clear (so the bird reads instantly, with no visual noise
+ * behind it), fading linearly back to full density by `HALO_START +
+ * HALO_SPAN` bird-scales out. Ported verbatim from the prototype's own
+ * `BirdHeader.draw()` halo, medium tuning: 0.6-1.0x scale (an earlier
+ * prototype iteration used a much wider 1.7x). */
+const HALO_START = 0.6;
+const HALO_SPAN = 0.4;
+/** Halo values at or below this read as fully clear — matches the
+ * prototype's own `if (halo <= 0.02) return null;` early-out. */
+const HALO_CLEAR_THRESHOLD = 0.02;
 
 /** Below this viewport width the font shrinks for a denser character grid
  * (design motion table's dither-cell breakpoint, carried over to font size). */
@@ -234,7 +249,13 @@ export class BandEngine implements Engine {
 
 	draw(now: number): void {
 		if (!this.cols || !this.rows) return;
-		const t = this.reduced ? this.seedT : this.seedT + now / 1000;
+		// Two separate clocks (medium-intensity port): the ambient field
+		// drifts at `FIELD_DRIFT` real-time multiples (`tField`), while the
+		// bird's own motion (`tBird`) stays tied to REAL elapsed seconds so
+		// its wingbeat frequency never changes — "the field speeds up around
+		// it, never the bird itself, which stays at a calm 1.1 Hz."
+		const tBird = this.reduced ? this.seedT : this.seedT + now / 1000;
+		const tField = this.reduced ? this.seedT : this.seedT + (now / 1000) * FIELD_DRIFT;
 		if (!this.reduced && this.ripple) {
 			const { next, prev } = stepRipple(
 				this.cols,
@@ -265,12 +286,13 @@ export class BandEngine implements Engine {
 
 		// Same pure motion as the home hero used (owner rule: "same calm
 		// settings" — 1.1 wingbeats/s, gentle hover/sway), just recomposited
-		// here, now scaled from REAL physical cell/bird pixel sizes.
+		// here, now scaled from REAL physical cell/bird pixel sizes. Driven by
+		// `tBird` (real elapsed seconds), not the drift-scaled `tField`.
 		const frame: BirdFrame = {
-			...computeBirdMotion(t, this.reduced),
+			...computeBirdMotion(tBird, this.reduced),
 			...birdGeometryScale(this.ch, this.cw, this.bird.S)
 		};
-		const shimmer = Math.floor(t * 1.5);
+		const shimmer = Math.floor(tField * 1.5);
 
 		// The bird's own ramp-value field, sampled at a cell's PHYSICAL
 		// center (not raw cell index — see `birdSpaceOf`'s doc comment) so
@@ -307,16 +329,24 @@ export class BandEngine implements Engine {
 			// whether the cell draws anything at all via the old ordered
 			// Bayer dither (`passesDither`).
 			//
-			// Owner correction (apply-fix round 1): (a) "ambient fields use
-			// the density ramp only" — this is procedural noise with no real
+			// Owner correction (apply-fix round 1): "ambient fields use the
+			// density ramp only" — this is procedural noise with no real
 			// shape to trace, so no `pickGlyph` edge tracing here (that's
-			// reserved for the bird below). (b) "keep the ambient field
-			// quiet behind it (lower contrast/density) so the bird reads
-			// instantly" — `FIELD_DIM` scales the density down.
+			// reserved for the bird above).
+			//
+			// Medium-intensity port (owner-approved header prototype v5):
+			// "keep the ambient field quiet behind it so the bird reads
+			// instantly" is now a radial clearing HALO (ported from the
+			// prototype) instead of a flat dim — fully clear within
+			// `HALO_START` bird-scales of the bird, fading back to full
+			// density by `HALO_START + HALO_SPAN` out.
+			const halo = clamp01((Math.hypot(bx, by) - HALO_START) / HALO_SPAN);
+			if (halo <= HALO_CLEAR_THRESHOLD) return null;
+
 			const scanline = y % 2 === 1 ? SCANLINE_DIM : 1;
 			const { dx, dy } = rippleOffset(x, y);
-			const { value, ink } = iridescentField(samplePrimary, sampleShimmer, x + dx, y + dy, t);
-			const glyph = densityGlyph(clamp01(value * scanline * FIELD_DIM));
+			const { value, ink } = iridescentField(samplePrimary, sampleShimmer, x + dx, y + dy, tField);
+			const glyph = densityGlyph(clamp01(value * scanline * halo));
 			if (glyph === ' ') return null;
 			return { glyph, color: this.tokens[ink] };
 		});
