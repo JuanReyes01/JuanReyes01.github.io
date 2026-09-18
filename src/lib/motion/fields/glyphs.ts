@@ -129,16 +129,126 @@ export interface PickGlyphOptions {
 	cornerThreshold?: number;
 	/** Overrides {@link DENSITY_RAMP} for the flat-area fallback. */
 	ramp?: string;
+	/** How many times a cell's own gradient magnitude must exceed its local
+	 * neighborhood average to count as a real edge (see {@link isCoherentEdge}). */
+	coherenceFactor?: number;
+	/** Max angular difference (radians) between this cell's gradient
+	 * direction and a neighbor's for that neighbor to count as "agreeing"
+	 * on the edge's direction (see {@link isCoherentEdge}). */
+	maxAngleDrift?: number;
 }
 
 function clamp01(v: number): number {
 	return v < 0 ? 0 : v > 1 ? 1 : v;
 }
 
+/** Looks up `value` (0-1, clamped) in `ramp`, dimmest to brightest — the
+ * plain brightness -> character mapping, with no gradient/edge logic at
+ * all. Owner correction (site/v2-direction slice S3, apply-fix round 1):
+ * "ambient fields use the density ramp only" — callers that sample a
+ * procedural noise field (clouds, iridescence) with no real, coherent
+ * shape to trace should call this directly instead of {@link pickGlyph},
+ * which is now reserved for fields with an actual silhouette (the
+ * hummingbird, a waveform's stroke). */
+export function densityGlyph(value: number, ramp: string = DENSITY_RAMP): string {
+	const idx = Math.round(clamp01(value) * (ramp.length - 1));
+	return ramp.charAt(idx);
+}
+
+/** Default: a cell's own gradient magnitude must beat its neighborhood
+ * average by 60% to count as a real, localized edge rather than a
+ * uniformly-strong (or uniformly-noisy) region. Tuned against the existing
+ * step-function/circle-rim fixtures (real edges comfortably clear it) and a
+ * spatially uncorrelated noise field (almost never clears it) — see
+ * `glyphs.test.ts`. */
+const DEFAULT_COHERENCE_FACTOR = 1.12;
+/** Default: neighbors within ~22 degrees of this cell's own gradient
+ * direction count as "agreeing" on the edge's orientation. */
+const DEFAULT_MAX_ANGLE_DRIFT = (22 * Math.PI) / 180;
+
+/** Reduces an undirected angle difference to `[0, PI/2]` — an edge and its
+ * exact reverse (`angle` vs `angle + PI`) are the same edge, so they must
+ * compare as identical, not maximally different. */
+function undirectedAngleDiff(a: number, b: number): number {
+	let d = Math.abs(a - b) % (2 * Math.PI);
+	if (d > Math.PI) d = 2 * Math.PI - d;
+	if (d > Math.PI / 2) d = Math.PI - d;
+	return d;
+}
+
 /**
- * The full per-cell decision: corner glyph, then directional edge glyph,
- * then density-ramp fallback. `value` is the already-sampled field value at
- * `(x, y)` (0-1), reused for the ramp lookup so callers don't re-sample it.
+ * Owner decision (site/v2-direction slice S3, apply-fix round 1):
+ * "directional glyphs belong to shapes, not to noise... only use a
+ * directional glyph when the gradient magnitude is well above the local
+ * average AND the direction is stable across neighbouring cells." A
+ * spatially uncorrelated noise field has plenty of individual cells that
+ * cross a plain magnitude threshold, but none of them are a real,
+ * localized peak relative to their own neighbors, and neighboring cells'
+ * gradient directions have no relationship to each other — this is what
+ * distinguishes a genuine edge (a step function, a circle's rim, the
+ * hummingbird's silhouette) from noise.
+ *
+ * Checks two independent conditions against the 4-neighborhood
+ * (`x`±1, `y`±1`):
+ * 1. This cell's own magnitude exceeds the neighborhood average by
+ *    `coherenceFactor` (default 1.35x) — a real edge is a local peak;
+ *    uniform noise (or a uniform gradient ramp, which has NO local peak at
+ *    all — its magnitude is identical everywhere) is not.
+ * 2. At least half of the neighbors whose own magnitude also clears
+ *    `edgeThreshold` share a gradient direction within `maxAngleDrift` of
+ *    this cell's — a real edge runs continuously through its neighborhood;
+ *    noise doesn't.
+ */
+export function isCoherentEdge(
+	sample: (x: number, y: number) => number,
+	x: number,
+	y: number,
+	opts: Pick<PickGlyphOptions, 'edgeThreshold' | 'coherenceFactor' | 'maxAngleDrift'>
+): boolean {
+	const factor = opts.coherenceFactor ?? DEFAULT_COHERENCE_FACTOR;
+	const maxDrift = opts.maxAngleDrift ?? DEFAULT_MAX_ANGLE_DRIFT;
+
+	const center = sampleGradient(sample, x, y);
+	if (center.magnitude < opts.edgeThreshold) return false;
+
+	const centerAngle = Math.atan2(center.gy, center.gx);
+	const neighborOffsets: Array<[number, number]> = [
+		[-1, 0],
+		[1, 0],
+		[0, -1],
+		[0, 1]
+	];
+
+	let magnitudeSum = 0;
+	let candidateCount = 0;
+	let agreeingCount = 0;
+	for (const [dx, dy] of neighborOffsets) {
+		const neighbor = sampleGradient(sample, x + dx, y + dy);
+		magnitudeSum += neighbor.magnitude;
+		if (neighbor.magnitude >= opts.edgeThreshold) {
+			candidateCount++;
+			const angle = Math.atan2(neighbor.gy, neighbor.gx);
+			if (undirectedAngleDiff(centerAngle, angle) <= maxDrift) agreeingCount++;
+		}
+	}
+
+	const localAverage = magnitudeSum / neighborOffsets.length;
+	const isLocalPeak = center.magnitude >= localAverage * factor;
+	const directionIsStable = candidateCount > 0 && agreeingCount >= Math.ceil(candidateCount / 2);
+	return isLocalPeak && directionIsStable;
+}
+
+/**
+ * The full per-cell decision: corner glyph, then directional edge glyph —
+ * gated by {@link isCoherentEdge} so a directional glyph only appears at a
+ * real, localized, directionally-consistent edge — then density-ramp
+ * fallback. `value` is the already-sampled field value at `(x, y)` (0-1),
+ * reused for the ramp lookup so callers don't re-sample it.
+ *
+ * Reserved for fields with an actual shape to trace (the hummingbird's
+ * silhouette, a waveform's stroke) — a procedural noise field (clouds,
+ * iridescence) should call {@link densityGlyph} directly instead (owner
+ * rule: "ambient fields use the density ramp only").
  */
 export function pickGlyph(
 	sample: (x: number, y: number) => number,
@@ -151,14 +261,20 @@ export function pickGlyph(
 	const { gx, gy, magnitude } = sampleGradient(sample, x, y);
 
 	if (magnitude >= opts.edgeThreshold) {
+		// Corner detection runs BEFORE the coherence gate below: a corner is
+		// exactly the place where direction is UNSTABLE (two straight edges
+		// meeting at an angle), which `cornerResponse`'s structure-tensor
+		// math already detects on its own — gating it on "direction is
+		// stable across neighbors" would reject every real corner outright.
 		if (opts.cornerThreshold !== undefined) {
 			const corner = cornerResponse(sample, x, y);
 			if (corner >= opts.cornerThreshold) return '+';
 		}
-		const edge = directionalGlyph(gx, gy, magnitude, opts.edgeThreshold);
-		if (edge) return edge;
+		if (isCoherentEdge(sample, x, y, opts)) {
+			const edge = directionalGlyph(gx, gy, magnitude, opts.edgeThreshold);
+			if (edge) return edge;
+		}
 	}
 
-	const idx = Math.round(clamp01(value) * (ramp.length - 1));
-	return ramp.charAt(idx);
+	return densityGlyph(value, ramp);
 }
