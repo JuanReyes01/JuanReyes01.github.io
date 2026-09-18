@@ -210,14 +210,21 @@ describe('computeBirdAnchor (physical pixels, not grid cells)', () => {
 		expect(S).toBeGreaterThan(300 * ORIGINAL_COEFFICIENT * 1.2);
 	});
 
-	it('centers the bird bounding box (flower included) in the frame, not off to one side', () => {
+	// Coordinator correction, round 2 (screenshot review): the header's
+	// title card (AsciiHeaderFrame) is anchored top-left and occupies
+	// roughly the left third of the frame — centering the bird at the
+	// frame's literal midpoint put its flower right behind the title's
+	// veil. The bird composition now centers in the OPEN space to the
+	// right of the title instead, vertically centered in the full frame.
+	it("centers the bird bounding box (flower included) in the open space right of the header title, not the frame's literal midpoint", () => {
 		const width = 1280;
 		const height = 300;
 		const { S, ax, ay } = computeBirdAnchor(width, height);
 		// bbox midpoint (fields/bird.ts bounds: x in [-1.45,0.88], y in [-0.9,1.02]).
 		const bboxMidX = ax + ((0.88 + -1.45) / 2) * S;
 		const bboxMidY = ay + ((1.02 + -0.9) / 2) * S;
-		expect(bboxMidX).toBeCloseTo(width / 2, 0);
+		expect(bboxMidX).toBeGreaterThan(width * 0.55);
+		expect(bboxMidX).toBeCloseTo(width * 0.7, 0);
 		expect(bboxMidY).toBeCloseTo(height / 2, 0);
 	});
 
@@ -231,6 +238,19 @@ describe('computeBirdAnchor (physical pixels, not grid cells)', () => {
 		expect(ax + 0.88 * S).toBeLessThan(width * 1.05);
 		expect(ay + -0.55 * S).toBeGreaterThan(-height * 0.05);
 		expect(ay + 0.75 * S).toBeLessThan(height * 1.05);
+	});
+
+	// Coordinator correction: "obvious at a glance, at 1280px AND at 400px."
+	// The composition's rightward shift (clearing the header title's
+	// top-left card) has plenty of room at desktop widths, but a narrow
+	// mobile header doesn't have 70% + half the bird's own width to spare —
+	// without a cap, the bird's right wing bled off the frame entirely.
+	it('keeps the bird on-screen at a narrow (mobile) header size, even though the desktop composition shifts it rightward', () => {
+		const width = 400;
+		const height = 180;
+		const { S, ax } = computeBirdAnchor(width, height);
+		expect(ax + 0.88 * S).toBeLessThan(width * 1.02);
+		expect(ax + -1.45 * S).toBeLessThan(width);
 	});
 });
 
