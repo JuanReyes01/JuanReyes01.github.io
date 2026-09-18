@@ -85,37 +85,25 @@
 	.title {
 		position: relative;
 		z-index: 1;
+		align-self: flex-start;
 		padding: 14px 18px;
 	}
-	/* Coordinator correction (site/v2-direction slice S3, apply-fix round
-	   1): same veil idiom as AsciiHeaderFrame — the figlet stays crisp text
-	   on top of the field, not blended into it. */
+	/* Approved header prototype: same solid, small title-card idiom as
+	   AsciiHeaderFrame (see its own comment) — a tight veil panel with a
+	   thin border, top-left, not a large watermark fading into the field. */
 	.title-veil {
-		padding: 14px 26px;
-		border-radius: 8px;
-		background: radial-gradient(
-			ellipse at center,
-			var(--veil) 0%,
-			var(--veil) 55%,
-			transparent 100%
-		);
+		padding: 10px 14px;
+		border-radius: 4px;
+		border: 1px solid color-mix(in srgb, var(--pc, var(--cyan)) 28%, var(--line));
+		background: var(--veil);
 	}
-	/* Same reasoning as AsciiHeaderFrame: a smaller, corner-anchored title
-	   leaves most of the field visible instead of the veil covering it. */
 	.title-veil :global(.fig) {
-		font-size: clamp(0.85rem, 0.5rem + 1.8vw, 1.7rem);
+		font-size: clamp(9px, 1.4vw, 15px);
+		font-weight: 700;
 	}
 	@media (max-width: 760px) {
 		.field {
 			font-size: 0.36rem;
-		}
-	}
-	@media (max-width: 480px) {
-		.title-veil :global(.fig) {
-			font-size: 0.5rem;
-		}
-		.title-veil {
-			padding: 8px 14px;
 		}
 	}
 </style>

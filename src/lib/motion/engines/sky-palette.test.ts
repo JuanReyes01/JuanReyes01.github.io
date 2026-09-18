@@ -31,10 +31,11 @@ describe('resolveSkyColor', () => {
 		expect(resolveSkyColor('farwing', TOKENS)).toMatch(/^rgba\(/);
 	});
 
-	it('gives the flower pink petals, a yellow center and a green stem', () => {
+	it('gives the flower pink petals, a yellow center and a green stem/leaf', () => {
 		expect(resolveSkyColor('petal', TOKENS)).toBe(TOKENS.pink);
 		expect(resolveSkyColor('fcenter', TOKENS)).toBe(TOKENS.yellow);
 		expect(resolveSkyColor('stem', TOKENS)).toMatch(/^rgba\(/);
+		expect(resolveSkyColor('leaf', TOKENS)).toMatch(/^rgba\(/);
 	});
 
 	it('resolves the ripple hot-spot colors to pink (crest) and cyan (trough)', () => {

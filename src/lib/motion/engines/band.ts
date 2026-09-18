@@ -50,11 +50,12 @@ import type { Engine } from '../runtime/canvas-action';
  * round on screen regardless of font metrics. Proportional to the band's own
  * size, not a fixed pixel size. The hummingbird's own bounding box
  * (`fields/bird.ts`'s early-exit bounds, flower included): x in
- * [-1.45, 0.88], y in [-0.9, 1.02]. Its midpoint is what this centers in the
- * frame — see `band.test.ts`.
+ * [-1.45, 0.88], y in [-0.9, 0.72] (approved header prototype's own bounds —
+ * its flower stem is shorter than the prior "legacy" port's). Its midpoint
+ * is what this centers in the frame — see `band.test.ts`.
  */
 const BIRD_BBOX_X_MID = (0.88 + -1.45) / 2;
-const BIRD_BBOX_Y_MID = (1.02 + -0.9) / 2;
+const BIRD_BBOX_Y_MID = (0.72 + -0.9) / 2;
 /** The header's title card (`AsciiHeaderFrame`) is anchored top-left and
  * occupies roughly the left third of the frame — the bird composition
  * centers itself in the OPEN space to the right of it, not the frame's

@@ -1,10 +1,13 @@
 /**
- * Hummingbird geometry sampling for the hero (design D1 boundary, motion
- * table "Sky /"). Ported verbatim from the legacy `sampleBird`/`ell`/
- * `segDist`/`solid` functions — every magic number here is load-bearing
- * (owner rule: "real hummingbird colors... exactly as in the current legacy
- * file"), so this stays a byte-for-byte port of the layered ellipse/segment
- * hit-tests, not a reinterpretation.
+ * Hummingbird geometry sampling for `/field/`'s band (design D1 boundary,
+ * motion table "Sky /"). Ported byte-for-byte from the owner-approved header
+ * prototype's own `sampleBird`/`ellipseHit`/`segmentDistance`/`solidness`
+ * functions — every magic number here is load-bearing, so this stays a
+ * faithful port of the layered ellipse/segment hit-tests, not a
+ * reinterpretation. (The flower/stem/leaf geometry below was re-ported from
+ * the prototype during the approved-header-prototype apply pass — it used to
+ * match an older pre-prototype "legacy" flower that was noticeably smaller
+ * and merged the leaf into the stem's own key.)
  */
 import { clamp } from './math';
 
@@ -22,7 +25,8 @@ export type BirdPartKey =
 	| 'eye'
 	| 'petal'
 	| 'fcenter'
-	| 'stem';
+	| 'stem'
+	| 'leaf';
 
 export interface BirdSample {
 	key: BirdPartKey;
@@ -125,7 +129,7 @@ function solidness(f: number): number {
  * matching the legacy draw order exactly.
  */
 export function sampleBird(x: number, y: number, frame: BirdFrame): BirdSample | null {
-	if (x < -1.45 || x > 0.88 || y < -0.9 || y > 1.02) return null;
+	if (x < -1.45 || x > 0.88 || y < -0.9 || y > 0.72) return null;
 
 	const { bx, by, ph, thin, tailR, eyeR2 } = frame;
 	let key: BirdPartKey | null = null;
@@ -135,24 +139,24 @@ export function sampleBird(x: number, y: number, frame: BirdFrame): BirdSample |
 	const fdx = x + 1.14;
 	const fdy = y + 0.06;
 	const rr = Math.hypot(fdx, fdy);
-	if (rr < 0.05) {
+	if (rr < 0.075) {
 		key = 'fcenter';
 		value = 0.95;
-	} else if (rr < 0.17) {
-		const petal = 0.115 + 0.045 * Math.cos(Math.atan2(fdy, fdx) * 5 + 0.4);
+	} else if (rr < 0.26) {
+		const petal = 0.17 + 0.075 * Math.cos(Math.atan2(fdy, fdx) * 5 + 0.4);
 		if (rr < petal) {
 			key = 'petal';
 			value = 0.5 + 0.45 * (1 - rr / petal);
 		}
 	}
-	if (!key && segmentDistance(x, y, -1.15, 0.06, -1.22, 1.0) < Math.max(0.016, thin * 0.8)) {
+	if (!key && segmentDistance(x, y, -1.15, 0.06, -1.2, 0.58) < Math.max(0.016, thin * 0.8)) {
 		key = 'stem';
 		value = 0.6;
 	}
 	if (!key) {
-		const leaf = ellipseHit(x, y, -1.07, 0.54, 0.13, Math.max(0.04, thin), -0.5);
+		const leaf = ellipseHit(x, y, -1.07, 0.38, 0.13, Math.max(0.04, thin), -0.5);
 		if (leaf) {
-			key = 'stem';
+			key = 'leaf';
 			value = 0.4 + 0.4 * leaf.f;
 		}
 	}

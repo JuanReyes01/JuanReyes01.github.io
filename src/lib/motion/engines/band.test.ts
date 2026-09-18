@@ -220,9 +220,9 @@ describe('computeBirdAnchor (physical pixels, not grid cells)', () => {
 		const width = 1280;
 		const height = 300;
 		const { S, ax, ay } = computeBirdAnchor(width, height);
-		// bbox midpoint (fields/bird.ts bounds: x in [-1.45,0.88], y in [-0.9,1.02]).
+		// bbox midpoint (fields/bird.ts bounds: x in [-1.45,0.88], y in [-0.9,0.72]).
 		const bboxMidX = ax + ((0.88 + -1.45) / 2) * S;
-		const bboxMidY = ay + ((1.02 + -0.9) / 2) * S;
+		const bboxMidY = ay + ((0.72 + -0.9) / 2) * S;
 		expect(bboxMidX).toBeGreaterThan(width * 0.55);
 		expect(bboxMidX).toBeCloseTo(width * 0.7, 0);
 		expect(bboxMidY).toBeCloseTo(height / 2, 0);
