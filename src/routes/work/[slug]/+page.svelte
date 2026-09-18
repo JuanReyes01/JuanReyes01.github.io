@@ -3,22 +3,37 @@
 	import Tag from '$lib/components/Tag.svelte';
 	import Metric from '$lib/components/Metric.svelte';
 	import AsciiDiagram from '$lib/components/AsciiDiagram.svelte';
-	import StaticAsciiHeader from '$lib/components/StaticAsciiHeader.svelte';
+	import AsciiHeaderFrame from '$lib/components/AsciiHeaderFrame.svelte';
 	import SeoHead from '$lib/components/SeoHead.svelte';
+	import { waveform as waveformAction } from '$lib/motion/actions/waveform';
+	import type { WaveformActionHandle } from '$lib/motion/actions/waveform';
+	import { deriveWaveSignature } from '$lib/motion/fields/waveform';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
 
 	const buildNumber = $derived(String(data.build).padStart(2, '0'));
 
-	// Zero-JS route (design route table) — reuses /work/'s own figlet rather
-	// than generating one per build title (owner decision site/v2-direction
-	// slice S3, item C: "in the spirit of" the main headers, no client JS).
-	const FIG = `__        _____  ____  _  __
-\\ \\      / / _ \\|  _ \\| |/ /
- \\ \\ /\\ / / | | | |_) | ' /
-  \\ V  V /| |_| |  _ <| . \\
-   \\_/\\_/  \\___/|_| \\_\\_|\\_\\`;
+	let waveHandle: WaveformActionHandle | null = null;
+
+	// Owner complaint: "cuando voy a los builds individuales la animación
+	// ascii muere" — this route now hydrates (see +page.server.ts) and gets
+	// the SAME live waveform engine /work/ uses, locked to THIS build's own
+	// signature (identical seed shape to /work/'s own `focusBuildWave`)
+	// instead of the ambient default/build-time-only static trace. There is
+	// no hover/focus row list on this single-build page, so the signature is
+	// set once and never reset — pointer/touch deform still works via the
+	// shared action's own listeners, same interaction as /work/.
+	function mountWaveform(node: HTMLCanvasElement) {
+		waveHandle = waveformAction(node, { section: 'work' });
+		waveHandle.setSignature(deriveWaveSignature(`${data.slug}:${data.metric.value}`));
+		return {
+			destroy() {
+				waveHandle?.destroy();
+				waveHandle = null;
+			}
+		};
+	}
 </script>
 
 <SeoHead
@@ -36,10 +51,16 @@
 	headingLevel={1}
 >
 	{#snippet head()}
-		<!-- Approved header prototype port, requirement 5: this zero-JS case
-		     study gets a static trace of ITS OWN build's waveform (same seed
-		     shape as /work/'s own live rows), not the generic ambient field. -->
-		<StaticAsciiHeader art={FIG} variant="wave" seed="{data.slug}:{data.metric.value}" />
+		<!-- Owner request: bring the live ASCII header to individual case
+		     studies. Same AsciiHeaderFrame shell /work/ uses, with a live
+		     waveform canvas locked to THIS build's own signature — and the
+		     small title card names the build itself, not the generic "WORK"
+		     figlet /work/'s own header shows. -->
+		<AsciiHeaderFrame art={data.title}>
+			{#snippet canvas()}
+				<canvas aria-hidden="true" use:mountWaveform></canvas>
+			{/snippet}
+		</AsciiHeaderFrame>
 	{/snippet}
 
 	<p class="summary">{data.summary}</p>
