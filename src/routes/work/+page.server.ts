@@ -10,7 +10,9 @@ import type { PageServerLoad } from './$types';
 
 // The career timeline canvas hydrates here now — v2 direction slice S1
 // merged `/experience/` into `/work/`, so the timeline graph is the index
-// of the whole page. `/work/[slug]/` stays zero-JS (design route table).
+// of the whole page. `/work/[slug]/` hydrates too now (its own live
+// per-build waveform header), so `/experience/` and `/404` are the only
+// zero-JS routes left (see `scripts/verify-build.ts`).
 export const csr = true;
 
 export const load: PageServerLoad = () => {

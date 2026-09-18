@@ -51,4 +51,21 @@ describe('work case study page (/work/[slug]/)', () => {
 		const { body } = render(Page, { props: { data: CREDITBAY } });
 		expect(body).toMatch(/href="\/work\/"/);
 	});
+
+	// Owner complaint: "cuando voy a los builds individuales la animación
+	// ascii muere" — this route now hydrates a live waveform canvas (same
+	// engine as /work/) instead of a build-time-only static ASCII field.
+	it('renders a live waveform canvas in the header instead of the static field', () => {
+		const { body } = render(Page, { props: { data: CREDITBAY } });
+		expect(body).toContain('<canvas');
+		expect(body).not.toContain('class="field raw-glyphs"');
+	});
+
+	it("shows the build's own title in the header card, not the generic WORK figlet", () => {
+		const { body } = render(Page, { props: { data: CREDITBAY } });
+		// The shared "WORK" figlet's distinctive first-line substring must be
+		// gone from this route now that the header card names the build.
+		expect(body).not.toContain('_____  ____  _  __');
+		expect(body.match(/CreditBay/g)?.length).toBeGreaterThanOrEqual(2);
+	});
 });
