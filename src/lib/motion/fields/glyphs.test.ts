@@ -4,6 +4,8 @@ import {
 	directionalGlyph,
 	cornerResponse,
 	pickGlyph,
+	isCoherentEdge,
+	densityGlyph,
 	DENSITY_RAMP
 } from './glyphs';
 
@@ -127,7 +129,14 @@ describe('pickGlyph', () => {
 		expect(pickGlyph(circle, cx + 30, cy, circle(cx + 30, cy), opts)).toBe(DENSITY_RAMP.charAt(0));
 	});
 
-	it('renders a uniform diagonal ramp with one consistent diagonal glyph (no false edges elsewhere)', () => {
+	// Owner correction (site/v2-direction slice S3, apply-fix round 1):
+	// "directional glyphs belong to shapes, not noise" — a uniform ramp
+	// has the SAME gradient magnitude everywhere (no cell is a local peak
+	// relative to its neighbors), so under the new coherence gate it no
+	// longer counts as a "real edge" — every cell falls back to the
+	// density ramp instead of tracing a false diagonal line through a
+	// perfectly smooth gradient.
+	it('does NOT trace a uniform ramp as an edge — no cell is a local peak, so it stays on the density ramp', () => {
 		const ramp = (x: number, y: number) => x + y;
 		const opts = { edgeThreshold: 0.5 };
 		for (const [x, y] of [
@@ -135,7 +144,7 @@ describe('pickGlyph', () => {
 			[3, 4],
 			[10, -2]
 		]) {
-			expect(pickGlyph(ramp, x, y, 0, opts)).toBe('/');
+			expect(pickGlyph(ramp, x, y, 0, opts)).toBe(DENSITY_RAMP.charAt(0));
 		}
 	});
 
@@ -153,5 +162,88 @@ describe('pickGlyph', () => {
 	it('accepts a custom ramp string', () => {
 		const flat = () => 1;
 		expect(pickGlyph(flat, 0, 0, 1, { edgeThreshold: 0.1, ramp: ' .#' })).toBe('#');
+	});
+
+	// Owner correction (site/v2-direction slice S3, apply-fix round 1):
+	// "applying pickGlyph's edge tracing to the ambient cloud/iridescent
+	// field invents a direction in every cell, which is what produces the
+	// random dashes and pipes" — a spatially uncorrelated noise field
+	// (every cell's value is independent of its neighbors, unlike the
+	// smooth value-noise the real engines sample) must yield ALMOST NO
+	// directional glyphs, even though plenty of individual cells cross
+	// edgeThreshold on their own.
+	it('yields almost no directional glyphs on a spatially uncorrelated noise field, even though many cells individually cross edgeThreshold', () => {
+		// Deterministic per-cell hash -> [0,1), completely uncorrelated
+		// between neighboring cells (unlike real Perlin/value noise).
+		const noise = (x: number, y: number): number => {
+			const n = Math.sin(x * 127.1 + y * 311.7) * 43758.5453;
+			return n - Math.floor(n);
+		};
+		const opts = { edgeThreshold: 0.15 };
+		let edgeCount = 0;
+		let total = 0;
+		for (let y = 0; y < 30; y++) {
+			for (let x = 0; x < 30; x++) {
+				const glyph = pickGlyph(noise, x, y, noise(x, y), opts);
+				if ('|/\\'.includes(glyph)) edgeCount++;
+				total++;
+			}
+		}
+		expect(edgeCount / total).toBeLessThan(0.1);
+	});
+});
+
+describe('isCoherentEdge', () => {
+	it('is true at a real step-function boundary (magnitude peaks there, direction is stable along the boundary)', () => {
+		const step = (x: number) => (x >= 10 ? 1 : 0);
+		expect(isCoherentEdge(step, 10, 5, { edgeThreshold: 0.3 })).toBe(true);
+	});
+
+	it('is true along a soft circle rim', () => {
+		const cx = 20;
+		const cy = 20;
+		const r = 8;
+		const k = 1.5;
+		const circle = (x: number, y: number) => {
+			const d = Math.hypot(x - cx, y - cy);
+			return 1 / (1 + Math.exp((d - r) * k));
+		};
+		expect(isCoherentEdge(circle, cx, cy - r, { edgeThreshold: 0.05 })).toBe(true);
+		expect(isCoherentEdge(circle, cx - r, cy, { edgeThreshold: 0.05 })).toBe(true);
+	});
+
+	it('is false deep inside a flat region (no gradient at all)', () => {
+		const flat = () => 0.5;
+		expect(isCoherentEdge(flat, 5, 5, { edgeThreshold: 0.1 })).toBe(false);
+	});
+
+	it('is false on a uniform ramp — magnitude never peaks relative to its neighbors', () => {
+		const ramp = (x: number, y: number) => x + y;
+		expect(isCoherentEdge(ramp, 5, 5, { edgeThreshold: 0.5 })).toBe(false);
+	});
+
+	it('is false at an isolated noise spike with no directionally-consistent neighbors', () => {
+		// One cell is a sharp outlier; its neighbors are all flat and
+		// share no consistent gradient direction with it or each other.
+		const spike = (x: number, y: number) => (x === 5 && y === 5 ? 1 : 0);
+		expect(isCoherentEdge(spike, 5, 5, { edgeThreshold: 0.1 })).toBe(false);
+	});
+});
+
+describe('densityGlyph', () => {
+	it('maps a value to the correct DENSITY_RAMP character by rounding to the nearest index', () => {
+		expect(densityGlyph(0)).toBe(DENSITY_RAMP.charAt(0));
+		expect(densityGlyph(1)).toBe(DENSITY_RAMP.charAt(DENSITY_RAMP.length - 1));
+		const mid = Math.round(0.5 * (DENSITY_RAMP.length - 1));
+		expect(densityGlyph(0.5)).toBe(DENSITY_RAMP.charAt(mid));
+	});
+
+	it('clamps out-of-range values instead of throwing or indexing out of bounds', () => {
+		expect(densityGlyph(-5)).toBe(DENSITY_RAMP.charAt(0));
+		expect(densityGlyph(5)).toBe(DENSITY_RAMP.charAt(DENSITY_RAMP.length - 1));
+	});
+
+	it('accepts a custom ramp string, same convention as pickGlyph', () => {
+		expect(densityGlyph(1, ' .#')).toBe('#');
 	});
 });
