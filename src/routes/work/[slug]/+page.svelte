@@ -3,12 +3,22 @@
 	import Tag from '$lib/components/Tag.svelte';
 	import Metric from '$lib/components/Metric.svelte';
 	import AsciiDiagram from '$lib/components/AsciiDiagram.svelte';
+	import StaticAsciiHeader from '$lib/components/StaticAsciiHeader.svelte';
 	import SeoHead from '$lib/components/SeoHead.svelte';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
 
 	const buildNumber = $derived(String(data.build).padStart(2, '0'));
+
+	// Zero-JS route (design route table) — reuses /work/'s own figlet rather
+	// than generating one per build title (owner decision site/v2-direction
+	// slice S3, item C: "in the spirit of" the main headers, no client JS).
+	const FIG = `__        _____  ____  _  __
+\\ \\      / / _ \\|  _ \\| |/ /
+ \\ \\ /\\ / / | | | |_) | ' /
+  \\ V  V /| |_| |  _ <| . \\
+   \\_/\\_/  \\___/|_| \\_\\_|\\_\\`;
 </script>
 
 <SeoHead
@@ -25,6 +35,10 @@
 	meta="build {buildNumber}"
 	headingLevel={1}
 >
+	{#snippet head()}
+		<StaticAsciiHeader art={FIG} />
+	{/snippet}
+
 	<p class="summary">{data.summary}</p>
 	<ul class="stack" aria-label="Stack">
 		{#each data.stack as item (item)}
