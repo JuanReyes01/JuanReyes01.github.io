@@ -117,10 +117,15 @@
 	/* Approved header prototype (study 1 — home, "approved as-is"): ONE
 	   full-bleed composition — the character field fills the entire header
 	   and the hero text sits at the bottom of it over a soft veil, never a
-	   text column drawn beside the canvas. */
+	   text column drawn beside the canvas.
+
+	   Medium-intensity port (v5): height now comes from CONTENT (this
+	   `min-height` is a floor around the prototype's own ~28-row band, not a
+	   rigid box) instead of a fixed 560px that padded every page the same
+	   regardless of how much bio copy it held. */
 	.hero {
 		position: relative;
-		min-height: 560px;
+		min-height: 420px;
 		display: flex;
 		flex-direction: column;
 		justify-content: flex-end;
@@ -138,29 +143,40 @@
 		display: block;
 		z-index: 0;
 	}
-	/* Soft bottom wash + a pool under the text — never a hard left-to-right
-	   wipe, or the header reads as "art on one side, words on the other"
-	   instead of one composition. Home carries the most copy, so its own
-	   wash is deeper than a generic header's (prototype: `.s-home
-	   .band::after`). */
+	/* Medium-intensity port (v5): a LOW ellipse shaped tightly to the text
+	   block — not a full-width bottom wash — so the field keeps running
+	   unbroken above the copy instead of being washed out across most of the
+	   header's height (prototype: `.s-home .band::after`). */
 	.hero-veil {
 		position: absolute;
 		inset: 0;
 		z-index: 1;
 		pointer-events: none;
 		background:
-			linear-gradient(to top, var(--veil) 0%, var(--veil) 46%, transparent 76%),
+			linear-gradient(to top, var(--veil) 0%, transparent 34%),
 			radial-gradient(
-				ellipse 64rem 34rem at 6% 74%,
+				ellipse 46rem 16rem at 12% 76%,
 				var(--veil) 0%,
-				var(--veil) 42%,
-				transparent 80%
+				var(--veil) 66%,
+				transparent 92%
 			);
 	}
 	.hero-text {
 		position: relative;
 		z-index: 2;
 		padding: 0 28px 34px;
+	}
+	/* Medium-intensity port (v5): a safety net in the panel colour, for when a
+	   bright cloud drifts under a line of copy — never relied on as the ONLY
+	   thing keeping text legible (the veil above already does that), just
+	   insurance. */
+	.prompt,
+	h2#hello,
+	.bio,
+	.links {
+		text-shadow:
+			0 1px 10px var(--banner),
+			0 0 3px var(--banner);
 	}
 	.bio {
 		max-width: 56ch;
@@ -262,11 +278,23 @@
 
 	@media (max-width: 760px) {
 		.hero {
-			/* The same rem-sized veil covers proportionally more of a narrow
-			   frame on its own (prototype: no separate mobile veil needed) —
-			   only the header's own height grows, so both bio paragraphs
-			   still have room to read above the fold. */
-			min-height: 600px;
+			/* Medium-intensity port (v5): height floor drops with the desktop
+			   one — content (prompt/title/bio/links) drives the real height
+			   from here, same as desktop. */
+			min-height: 320px;
+		}
+		/* A narrow column needs a ROUNDER pool (prototype: "or the copy's
+		   right edge bleeds") — width and height are much closer together
+		   than the desktop ellipse's wide, flat shape. */
+		.hero-veil {
+			background:
+				linear-gradient(to top, var(--veil) 0%, transparent 30%),
+				radial-gradient(
+					ellipse 30rem 26rem at 30% 72%,
+					var(--veil) 0%,
+					var(--veil) 72%,
+					transparent 96%
+				);
 		}
 		.hero-text {
 			padding: 0 18px 24px;
