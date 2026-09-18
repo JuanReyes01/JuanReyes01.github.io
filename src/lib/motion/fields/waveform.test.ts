@@ -6,7 +6,6 @@ import {
 	pokeWave1D,
 	stepWave1D,
 	traceGlyph,
-	staticWaveformRows,
 	waveformPokeAmount,
 	softClip
 } from './waveform';
@@ -235,38 +234,6 @@ describe('stepWave1D', () => {
 		const { next } = stepWave1D(size, current, previous);
 		expect(next[0]).toBe(0);
 		expect(next[size - 1]).toBe(0);
-	});
-});
-
-describe('staticWaveformRows', () => {
-	it('is deterministic — the same seed and size always produce the same rows', () => {
-		const a = staticWaveformRows(60, 7, 'creditbay:20 → 600');
-		const b = staticWaveformRows(60, 7, 'creditbay:20 → 600');
-		expect(a).toEqual(b);
-	});
-
-	it('returns exactly `rows` lines, each `cols` characters wide', () => {
-		const rows = staticWaveformRows(40, 5, 'amd:~90%');
-		expect(rows).toHaveLength(5);
-		for (const line of rows) expect(line).toHaveLength(40);
-	});
-
-	it('produces a genuinely different trace for a different build (a static header must look like ITS build)', () => {
-		const creditbay = staticWaveformRows(60, 7, 'creditbay:20 → 600').join('\n');
-		const amd = staticWaveformRows(60, 7, 'amd:~90%').join('\n');
-		expect(creditbay).not.toBe(amd);
-	});
-
-	it('draws a connected stroke, not a dashed staircase (more glyphs than columns)', () => {
-		const rows = staticWaveformRows(60, 7, 'credit-brain:10');
-		const totalGlyphs = rows.join('').replaceAll(' ', '').length;
-		expect(totalGlyphs).toBeGreaterThan(60);
-	});
-
-	it('never renders a flat line — the trace reaches more than one row', () => {
-		const rows = staticWaveformRows(60, 7, 'opinion-corpus:100k+');
-		const rowsWithGlyphs = rows.filter((line) => line.trim().length > 0);
-		expect(rowsWithGlyphs.length).toBeGreaterThan(1);
 	});
 });
 

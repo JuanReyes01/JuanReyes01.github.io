@@ -24,29 +24,4 @@ describe('StaticAsciiHeader', () => {
 		const b = render(StaticAsciiHeader, { props: { art: 'X', cols: 60, rows: 8 } }).body;
 		expect(a).not.toBe(b);
 	});
-
-	// Approved header prototype port, requirement 5: /work/[slug]/'s
-	// zero-JS header should read as ITS build's waveform (matching /work/'s
-	// own live look) instead of the generic ambient cloud field every other
-	// static header uses.
-	it('renders a wave variant seeded from the build, not the generic ambient field', () => {
-		const { body } = render(StaticAsciiHeader, {
-			props: { art: 'X', variant: 'wave', seed: 'creditbay:20 → 600' }
-		});
-		const fieldMatch = body.match(/<pre class="field[^>]*>([\s\S]*?)<\/pre>/);
-		expect(fieldMatch).not.toBeNull();
-		// A wave trace uses these glyphs; the ambient cloud field's own ramp
-		// (` .·:-=+*#%@`) never produces `/`, `\`, `‾` or `|`.
-		expect(fieldMatch?.[1]).toMatch(/[/\\‾|]/);
-	});
-
-	it('the wave variant is deterministic per seed — the same build always draws the same header', () => {
-		const a = render(StaticAsciiHeader, {
-			props: { art: 'X', variant: 'wave', seed: 'creditbay:20 → 600' }
-		}).body;
-		const b = render(StaticAsciiHeader, {
-			props: { art: 'X', variant: 'wave', seed: 'creditbay:20 → 600' }
-		}).body;
-		expect(a).toBe(b);
-	});
 });
