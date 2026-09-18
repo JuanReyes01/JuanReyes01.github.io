@@ -47,9 +47,13 @@ describe('field page (/field/)', () => {
 		expect(body.match(/<h1[ >]/g)).toHaveLength(1);
 	});
 
-	it('the band canvas is decorative (aria-hidden, not conveying information)', () => {
+	it('the band canvas is decorative (wrapped in an aria-hidden header frame, not conveying information)', () => {
 		const { body } = render(Page, { props: { data: DATA } });
-		expect(body).toMatch(/<canvas aria-hidden="true"/);
+		// site/v2-direction slice S3: the canvas now lives inside
+		// `AsciiHeaderFrame`'s `aria-hidden="true"` wrapper (alongside the
+		// large figlet overlay) instead of carrying the attribute itself —
+		// same accessibility outcome (hidden from assistive tech), new shell.
+		expect(body).toMatch(/aria-hidden="true"[\s\S]*<canvas/);
 	});
 
 	// design #4938 slice S2: the hummingbird moved here from the home hero,

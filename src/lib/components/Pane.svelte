@@ -82,11 +82,14 @@
 		color: var(--muted);
 		white-space: nowrap;
 	}
+	/* Owner decision site/v2-direction slice S3, item B: every hydrated/
+	   static header (AsciiHeaderFrame / StaticAsciiHeader) is now the ONLY
+	   `head` child and must claim the pane's FULL width — previously this
+	   was a 2-column grid (figlet + a `Strip` decoration beside it); with
+	   Strip deleted, a leftover `auto` column collapsed to the (zero)
+	   intrinsic width of the header's absolutely-positioned children. */
 	.pane-head {
-		display: grid;
-		grid-template-columns: auto minmax(0, 1fr);
-		gap: 18px;
-		align-items: center;
+		display: block;
 		margin-bottom: 16px;
 	}
 </style>
