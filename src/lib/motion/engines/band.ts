@@ -27,7 +27,7 @@
 import { makeTexture, sampleTexture } from '../fields/noise';
 import { iridescentField } from '../fields/iridescence';
 import { clamp01 } from '../fields/math';
-import { pickGlyph, DENSITY_RAMP } from '../fields/glyphs';
+import { pickGlyph, densityGlyph, DENSITY_RAMP } from '../fields/glyphs';
 import { birdGeometryScale, computeBirdMotion, sampleBird, type BirdFrame } from '../fields/bird';
 import { resolveSkyColor, type SkyColorKey } from './sky-palette';
 import type { Tokens } from '../runtime/tokens';
@@ -53,12 +53,29 @@ import type { Engine } from '../runtime/canvas-action';
  * x in [-1.45, 0.88], y in [-0.9, 1.02], which includes the flower), verified
  * in `band.test.ts`.
  */
+/** The hummingbird's own bounding box (`fields/bird.ts`'s early-exit bounds,
+ * flower included): x in [-1.45, 0.88], y in [-0.9, 1.02]. Its midpoint is
+ * what {@link computeBirdAnchor} centers in the frame. */
+const BIRD_BBOX_X_MID = (0.88 + -1.45) / 2;
+const BIRD_BBOX_Y_MID = (1.02 + -0.9) / 2;
+
 export function computeBirdAnchor(
 	widthPx: number,
 	heightPx: number
 ): { S: number; ax: number; ay: number } {
-	const S = heightPx * 0.45;
-	return { S, ax: widthPx * 0.62, ay: heightPx * 0.473 };
+	// Owner correction (site/v2-direction slice S3, apply-fix round 1):
+	// "the bird is the star of /field/ and it is far too small... make it
+	// dominate that header... centred in the composition with the flower."
+	// Roughly 2-3x the original 0.45 coefficient — at a typical header
+	// aspect ratio (wide, short), a bird this size legitimately bleeds past
+	// the frame's top/bottom edge (like a photo crop) rather than shrinking
+	// to guarantee zero clipping, which would defeat "obvious at a glance."
+	const S = heightPx * 0.62;
+	return {
+		S,
+		ax: widthPx * 0.5 - BIRD_BBOX_X_MID * S,
+		ay: heightPx * 0.5 - BIRD_BBOX_Y_MID * S
+	};
 }
 
 /** Converts a physical pixel position into the hummingbird's own normalized
@@ -85,9 +102,11 @@ export function birdSpaceOf(
  */
 const BIRD_EDGE_THRESHOLD = 0.55;
 
-/** Same idea as {@link BIRD_EDGE_THRESHOLD}, tuned for the ambient
- * iridescent field's own (much smoother) gradient instead of the bird's. */
-const FIELD_EDGE_THRESHOLD = 0.12;
+/** Owner correction (apply-fix round 1): "keep the ambient field quiet
+ * behind it (lower contrast/density) so the bird reads instantly." Scales
+ * the field's own density value down before the ramp lookup, so fewer
+ * cells clear the density ramp's brighter characters. */
+const FIELD_DIM = 0.62;
 
 /** Below this viewport width the font shrinks for a denser character grid
  * (design motion table's dither-cell breakpoint, carried over to font size). */
@@ -183,8 +202,6 @@ export class BandEngine implements Engine {
 
 		const samplePrimary = (x: number, y: number) => sampleTexture(this.texturePrimary, x, y);
 		const sampleShimmer = (x: number, y: number) => sampleTexture(this.textureShimmer, x, y);
-		const fieldValueAt = (cx: number, cy: number): number =>
-			iridescentField(samplePrimary, sampleShimmer, cx, cy, t).value;
 
 		// Same pure motion as the home hero used (owner rule: "same calm
 		// settings" — 1.1 wingbeats/s, gentle hover/sway), just recomposited
@@ -225,18 +242,21 @@ export class BandEngine implements Engine {
 
 			// Owner instruction (site/v2-direction slice S3, item A): "same
 			// iridescent field maths, now sampled to glyphs" — the scanline
-			// dimming and density now shape which DENSITY_RAMP character a
-			// cell gets (like `SkyEngine`'s cloud field), instead of gating
+			// dimming and density shape which DENSITY_RAMP character a cell
+			// gets (like `SkyEngine`'s cloud field), instead of gating
 			// whether the cell draws anything at all via the old ordered
-			// Bayer dither (`passesDither`) — that gate was tuned for a fine
-			// per-pixel raster and left the coarser character grid looking
-			// like sparse stars, not "a wide, dense character field."
+			// Bayer dither (`passesDither`).
+			//
+			// Owner correction (apply-fix round 1): (a) "ambient fields use
+			// the density ramp only" — this is procedural noise with no real
+			// shape to trace, so no `pickGlyph` edge tracing here (that's
+			// reserved for the bird below). (b) "keep the ambient field
+			// quiet behind it (lower contrast/density) so the bird reads
+			// instantly" — `FIELD_DIM` scales the density down and
+			// `FIELD_ALPHA` renders it at reduced opacity.
 			const scanline = y % 2 === 1 ? SCANLINE_DIM : 1;
 			const { value, ink } = iridescentField(samplePrimary, sampleShimmer, x, y, t);
-			const glyph = pickGlyph(fieldValueAt, x, y, clamp01(value * scanline), {
-				edgeThreshold: FIELD_EDGE_THRESHOLD,
-				ramp: DENSITY_RAMP
-			});
+			const glyph = densityGlyph(clamp01(value * scanline * FIELD_DIM));
 			if (glyph === ' ') return null;
 			return { glyph, color: this.tokens[ink] };
 		});
