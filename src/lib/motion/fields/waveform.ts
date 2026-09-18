@@ -9,14 +9,10 @@
  * simulation are all plain math here; only `engines/waveform.ts` touches a
  * canvas.
  */
-import { clamp, clamp01 } from './math';
-
 /** A signature's own raw amplitude (0.5-0.85) rarely reaches the strip's
  * full +-1 row range on its own; this boosts the displayed height so even
  * the calmest signature visibly travels most of the strip, not just its
- * middle third. Shared by the live `WaveformEngine` and the build-time
- * {@link staticWaveformRows} so a case study's zero-JS header reads at the
- * same visual scale as `/work/`'s own live one. */
+ * middle third. */
 export const DISPLAY_GAIN = 1.35;
 
 /** The 3 dimensions a build's own waveform signature can vary along. */
@@ -206,38 +202,4 @@ export function traceGlyph(
 	// Row 0 is the TOP (height +1), so a decreasing row number means the
 	// wave is RISING between these two columns.
 	return row < prevRow ? '/' : '\\';
-}
-
-/** An arbitrary fixed instant for the static build (design: matches the
- * spirit of every other engine's fixed reduced-motion seed — a calm, static
- * pose, not "the start" of anything). */
-const STATIC_WAVE_T = 1.2;
-
-/**
- * A `rows`-by-`cols` static ASCII trace of `seedText`'s own
- * {@link deriveWaveSignature}, sampled once at a fixed instant — the
- * zero-JS `/work/[slug]/` counterpart to `WaveformEngine`'s live canvas, so
- * a case study's own build-time header reads as ITS waveform rather than
- * the generic ambient field every other static header uses. Pure and
- * deterministic (design D1): same `cols`/`rows`/`seedText` always produces
- * the exact same rows.
- */
-export function staticWaveformRows(cols: number, rows: number, seedText: string): string[] {
-	const signature = deriveWaveSignature(seedText);
-	const grid: string[][] = Array.from({ length: rows }, () => new Array(cols).fill(' '));
-
-	let prevRow = 0;
-	for (let x = 0; x < cols; x++) {
-		const xn = cols > 1 ? x / (cols - 1) : 0;
-		const height = clamp(sampleWaveform(xn, signature, STATIC_WAVE_T) * DISPLAY_GAIN, -1, 1);
-		const row = Math.round(clamp01((1 - height) / 2) * (rows - 1));
-		const from = x === 0 ? row : prevRow;
-		for (let y = 0; y < rows; y++) {
-			const glyph = traceGlyph(row, from, y, rows);
-			if (glyph) grid[y][x] = glyph;
-		}
-		prevRow = row;
-	}
-
-	return grid.map((line) => line.join(''));
 }
