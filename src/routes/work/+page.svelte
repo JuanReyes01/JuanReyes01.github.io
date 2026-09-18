@@ -8,6 +8,9 @@
 	import { headerField } from '$lib/motion/actions/header-field';
 	import { timeline as timelineAction } from '$lib/motion/actions/timeline';
 	import type { TimelineActionHandle } from '$lib/motion/actions/timeline';
+	import { waveform as waveformAction } from '$lib/motion/actions/waveform';
+	import type { WaveformActionHandle } from '$lib/motion/actions/waveform';
+	import { deriveWaveSignature } from '$lib/motion/fields/waveform';
 	import { parseMonth, monthLabel, monthFromDate } from '$lib/domain/month';
 	import { deriveTimeline } from '$lib/domain/timeline';
 	import { readoutAt, type Readout } from '$lib/domain/readout';
@@ -34,9 +37,30 @@
 	const valueText = $derived(`${readout.date}: ${readout.text || 'No event yet'}`);
 
 	let handle: TimelineActionHandle | null = null;
+	let waveHandle: WaveformActionHandle | null = null;
 
 	function onReadout(next: Readout) {
 		readout = next;
+	}
+
+	function mountWaveform(node: HTMLCanvasElement) {
+		waveHandle = waveformAction(node, { section: 'work' });
+		return {
+			destroy() {
+				waveHandle?.destroy();
+				waveHandle = null;
+			}
+		};
+	}
+
+	// Owner decision site/v2-direction slice S3, item D: "hovering or
+	// focusing a build row changes its signature deterministically
+	// (amplitude/frequency/wave count derived from that build's metric or
+	// slug)" — both halves of the seed feed deriveWaveSignature (unit-tested
+	// in fields/waveform.test.ts), so two builds sharing a slug prefix or a
+	// coincidentally-similar metric still diverge in practice.
+	function focusBuildWave(build: { slug: string; metric: { value: string } }) {
+		waveHandle?.setSignature(deriveWaveSignature(`${build.slug}:${build.metric.value}`));
 	}
 
 	function mountTimeline(node: HTMLCanvasElement, params: { onReadout: (r: Readout) => void }) {
@@ -85,6 +109,12 @@
 				<canvas use:headerField={{ section: 'work' }}></canvas>
 			{/snippet}
 		</AsciiHeaderFrame>
+		<!-- owner decision site/v2-direction slice S3, item D: an ASCII
+		     waveform next to the work header field — the metaphor for the
+		     voice-agent calls behind these builds. -->
+		<figure class="wave-strip">
+			<canvas aria-hidden="true" use:mountWaveform></canvas>
+		</figure>
 	{/snippet}
 
 	<div class="tl">
@@ -157,8 +187,14 @@
 				sub={build.stack.join(' · ')}
 				href="/work/{build.slug}/"
 				lane={build.lane ?? undefined}
-				onactivate={() => build.lane && handle?.focusLane(build.lane)}
-				ondeactivate={() => build.lane && handle?.focusLane(null)}
+				onactivate={() => {
+					if (build.lane) handle?.focusLane(build.lane);
+					focusBuildWave(build);
+				}}
+				ondeactivate={() => {
+					if (build.lane) handle?.focusLane(null);
+					waveHandle?.resetSignature();
+				}}
 			>
 				{#snippet aside()}<Metric value={build.metric.value} label={build.metric.label} />{/snippet}
 			</Row>
@@ -167,6 +203,19 @@
 </Pane>
 
 <style>
+	.wave-strip {
+		margin: 10px 0 0;
+		height: 56px;
+		border: 1px solid var(--line);
+		border-radius: 4px;
+		background: var(--banner);
+		overflow: hidden;
+	}
+	.wave-strip canvas {
+		display: block;
+		width: 100%;
+		height: 100%;
+	}
 	.tl {
 		margin-top: 10px;
 	}
