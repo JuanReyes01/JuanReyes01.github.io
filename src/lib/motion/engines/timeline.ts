@@ -15,7 +15,7 @@ import { readoutAt, type Readout } from '../../domain/readout';
 import type { Grid, LayoutResult, Timeline } from '../../domain/types';
 import { cellColor, cellVisualState } from './timeline-visuals';
 import type { Engine } from '../runtime/canvas-action';
-import type { Tokens } from '../runtime/tokens';
+import { tokenRgba, type Tokens } from '../runtime/tokens';
 
 const ROWS_HEIGHT_RATIO = 1.4;
 const MAX_CELL_PX = 10.5;
@@ -210,7 +210,7 @@ export class TimelineEngine implements Engine {
 		const playheadCol =
 			this.layout.lab + Math.floor((Math.floor(playhead) - this.timeline.epoch) / this.layout.step);
 		ctx.globalAlpha = 1;
-		ctx.fillStyle = `rgba(240,84,119,${PLAYHEAD_FILL_ALPHA})`;
+		ctx.fillStyle = tokenRgba(this.tokens.pink, PLAYHEAD_FILL_ALPHA);
 		ctx.fillRect(playheadCol * cw, ch * 1.5, cw, (rows - 1.5) * ch);
 
 		ctx.textBaseline = 'middle';

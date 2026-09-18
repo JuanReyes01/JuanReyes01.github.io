@@ -294,3 +294,39 @@ describe('WaveformEngine', () => {
 		expect(allChars.includes('/') || allChars.includes('\\')).toBe(true);
 	});
 });
+
+describe('WaveformEngine poke feedback', () => {
+	// Regression: the poked column used to swap to a flat `pink` token, which
+	// is exactly the resting colour of a build whose palette pair STARTS at
+	// pink — `amd:~90%` and `opinion-corpus:100k+` both derive that pair, so
+	// dragging their headers changed the shape and nothing else.
+	function traceColours(drawn: Array<{ text: string; color: string }>): Set<string> {
+		const colours = new Set<string>();
+		for (const { text, color } of drawn) {
+			if ([...text].some((glyph) => TRACE_ONLY_GLYPHS.includes(glyph))) colours.add(color);
+		}
+		return colours;
+	}
+
+	it('changes the trace colour when poked, even when the build is pink', () => {
+		const { canvas, drawn } = fakeCanvas();
+		const engine = new WaveformEngine({ canvas, tokens: TOKENS, reduced: false, section: 'work' });
+		engine.resize();
+		engine.setPalette(['pink', 'magenta']);
+
+		engine.draw(0);
+		const resting = traceColours(drawn);
+		expect(resting.size).toBeGreaterThan(0);
+
+		drawn.length = 0;
+		engine.poke(600, 40);
+		engine.draw(60);
+		const poked = traceColours(drawn);
+
+		const added = [...poked].filter((colour) => !resting.has(colour));
+		expect(
+			added.length,
+			'a poke must paint the trace a colour it did not already use'
+		).toBeGreaterThan(0);
+	});
+});

@@ -42,7 +42,7 @@ import {
 	type WaveSignature,
 	type PaletteTokenPair
 } from '../fields/waveform';
-import { mix, type Rgb } from '../fields/color';
+import { mix, hotTraceRgb, type Rgb } from '../fields/color';
 import { cloudField } from '../fields/clouds';
 import { makeTexture, sampleTexture } from '../fields/noise';
 import { ditherOffset4x4 } from '../fields/dither';
@@ -271,7 +271,11 @@ export class WaveformEngine implements Engine {
 			hexToRgb(this.tokens[this.pair[0]]),
 			hexToRgb(this.tokens[this.pair[1]])
 		];
-		const pinkRgb = hexToRgb(this.tokens.pink);
+		// The poke pulls the trace toward the page's foreground instead of
+		// swapping to a flat `pink`: a build whose pair starts at pink was
+		// already drawing its resting trace in that exact colour, so the poke
+		// changed nothing visible (see `hotTraceRgb`).
+		const hotRgb = hotTraceRgb(pairRgb[0], hexToRgb(this.tokens.fg));
 
 		const cells: Array<Cell | null> = new Array(this.cols * this.rows).fill(null);
 		const put = (x: number, y: number, glyph: string, alpha: number, rgb: Rgb): void => {
@@ -333,7 +337,7 @@ export class WaveformEngine implements Engine {
 			const rowF = this.rowFloat(h);
 			const prevF = x > 0 ? this.rowFloat(this.heightAt(x - 1, t)) : rowF;
 			const energy = this.ripple ? Math.abs(this.ripple.current[x]) : 0;
-			const rgb = energy > 0.25 ? pinkRgb : pairRgb[0];
+			const rgb = energy > 0.25 ? hotRgb : pairRgb[0];
 			for (let y = 0; y < this.rows; y++) {
 				const glyph = curveGlyph(rowF, prevF, y, this.rows);
 				if (glyph) put(x, y, glyph, 1, rgb);
