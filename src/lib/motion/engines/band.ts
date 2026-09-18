@@ -55,6 +55,11 @@ import type { Engine } from '../runtime/canvas-action';
  */
 const BIRD_BBOX_X_MID = (0.88 + -1.45) / 2;
 const BIRD_BBOX_Y_MID = (1.02 + -0.9) / 2;
+/** The header's title card (`AsciiHeaderFrame`) is anchored top-left and
+ * occupies roughly the left third of the frame — the bird composition
+ * centers itself in the OPEN space to the right of it, not the frame's
+ * literal midpoint, so the title's veil never covers it. */
+const BIRD_COMPOSITION_CENTER_X = 0.7;
 
 export function computeBirdAnchor(
 	widthPx: number,
@@ -67,10 +72,21 @@ export function computeBirdAnchor(
 	// aspect ratio (wide, short), a bird this size legitimately bleeds past
 	// the frame's top/bottom edge (like a photo crop) rather than shrinking
 	// to guarantee zero clipping, which would defeat "obvious at a glance."
-	const S = heightPx * 0.62;
+	// Also capped by width: at narrow (mobile) widths there isn't enough
+	// room for both the header title's left-anchored card and a bird sized
+	// purely off `heightPx` — "obvious at a glance... at 400px" needs the
+	// bird a little smaller there, not overlapping the title, rather than
+	// full-height-scaled and squeezed off-frame.
+	const S = Math.min(heightPx * 0.62, widthPx * 0.22);
+	const naturalAx = widthPx * BIRD_COMPOSITION_CENTER_X - BIRD_BBOX_X_MID * S;
+	// At narrow (mobile) widths, `naturalAx` can still push the bird's right
+	// wing past the frame's own right edge. Cap it so the bird always stays
+	// on-screen; on desktop-width frames this cap never engages (see
+	// `band.test.ts`).
+	const maxAx = widthPx * 0.98 - 0.88 * S;
 	return {
 		S,
-		ax: widthPx * 0.5 - BIRD_BBOX_X_MID * S,
+		ax: Math.min(naturalAx, maxAx),
 		ay: heightPx * 0.5 - BIRD_BBOX_Y_MID * S
 	};
 }
