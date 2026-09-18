@@ -35,9 +35,7 @@ bun run verify-build  # asserts CNAME/.nojekyll/404.html/feeds and zero-JS route
 
 ## Deploy
 
-GitHub Pages currently serves `main` from the repository root (legacy build). `CNAME` pins the custom domain `jreyes.dev`; DNS lives in Cloudflare. Cutover to the SvelteKit build happens once CI is green end-to-end and the Pages source switches to a GitHub Actions workflow.
-
-The `deploy` job in `.github/workflows/ci.yml` runs on every push to `main` after `check` passes, but it refuses to run unless the Pages source is already set to `workflow` — merging this file does not change what jreyes.dev serves.
+GitHub Pages serves the prerendered SvelteKit build. The `deploy` job in `.github/workflows/ci.yml` runs on every push to `main` after `check` passes, and refuses to run unless the Pages source is set to `workflow`. `static/CNAME` pins the custom domain `jreyes.dev`; DNS lives in Cloudflare.
 
 ### Switch to the Actions build
 
