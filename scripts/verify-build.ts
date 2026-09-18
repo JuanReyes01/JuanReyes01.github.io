@@ -65,13 +65,16 @@ export function hasClientBundle(html: string): boolean {
 }
 
 /**
- * `/work/` itself now ships the timeline canvas (v2 direction slice S1
- * merged `/experience/` into `/work/`), so it's no longer zero-JS — but
- * every `/work/<slug>/` case study still is. Drops just the work index page
- * from a list of `work/**` html paths, keeping every case study.
+ * The directories/files still asserted zero-JS (owner request "bring the
+ * live ASCII header to the individual case-study pages": `/work/[slug]/`
+ * now hydrates its own per-build waveform header, same as `/work/` itself
+ * did after v2 direction slice S1 merged `/experience/`'s timeline in) —
+ * only `/experience/` (a plain redirect page) and `/404` remain zero-JS.
+ * `listHtml` is injected so this stays a pure, unit-testable function; the
+ * real caller passes `listHtmlFiles(buildDir, dir)`.
  */
-export function excludeWorkIndex(paths: string[]): string[] {
-	return paths.filter((path) => path !== 'work/index.html');
+export function zeroJsHtmlPaths(listHtml: (dir: string) => string[]): string[] {
+	return [...listHtml('experience'), '404.html'];
 }
 
 export function checkNoClientBundle(entries: { path: string; html: string }[]): Issue[] {
@@ -113,12 +116,9 @@ function main(): void {
 		issues.push(...checkSitemapUrlsHaveFiles(paths, exists));
 	}
 
-	const zeroJsFiles = [
-		...excludeWorkIndex(listHtmlFiles(buildDir, 'work')),
-		...listHtmlFiles(buildDir, 'writing'),
-		...listHtmlFiles(buildDir, 'experience'),
-		'404.html'
-	].filter((path) => exists(path));
+	const zeroJsFiles = zeroJsHtmlPaths((dir) => listHtmlFiles(buildDir, dir)).filter((path) =>
+		exists(path)
+	);
 	const zeroJsEntries = zeroJsFiles.map((path) => ({
 		path,
 		html: readFileSync(join(buildDir, path), 'utf-8')

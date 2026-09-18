@@ -6,7 +6,7 @@ import {
 	checkSitemapUrlsHaveFiles,
 	hasClientBundle,
 	checkNoClientBundle,
-	excludeWorkIndex
+	zeroJsHtmlPaths
 } from './verify-build';
 
 describe('checkCname', () => {
@@ -80,15 +80,20 @@ describe('hasClientBundle', () => {
 	});
 });
 
-describe('excludeWorkIndex', () => {
-	it('drops the work index page (it ships the timeline canvas since v2 direction slice S1) but keeps every case study', () => {
-		const paths = ['work/index.html', 'work/creditbay/index.html', 'work/amd/index.html'];
-		expect(excludeWorkIndex(paths)).toEqual(['work/creditbay/index.html', 'work/amd/index.html']);
+describe('zeroJsHtmlPaths', () => {
+	it('scans only experience and 404 — /work/[slug]/ now ships its own live per-build waveform header', () => {
+		const listHtml = (dir: string) =>
+			dir === 'experience' ? ['experience/index.html'] : ['SHOULD NOT APPEAR'];
+		expect(zeroJsHtmlPaths(listHtml)).toEqual(['experience/index.html', '404.html']);
 	});
 
-	it('is a no-op when the work index page is absent from the list', () => {
-		const paths = ['work/creditbay/index.html'];
-		expect(excludeWorkIndex(paths)).toEqual(paths);
+	it('never asks for the work or writing directories', () => {
+		const requestedDirs: string[] = [];
+		zeroJsHtmlPaths((dir) => {
+			requestedDirs.push(dir);
+			return [];
+		});
+		expect(requestedDirs).toEqual(['experience']);
 	});
 });
 
