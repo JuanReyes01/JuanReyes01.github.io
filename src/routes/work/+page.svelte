@@ -4,7 +4,6 @@
 	import Row from '$lib/components/Row.svelte';
 	import Metric from '$lib/components/Metric.svelte';
 	import Figlet from '$lib/components/Figlet.svelte';
-	import Strip from '$lib/components/Strip.svelte';
 	import SeoHead from '$lib/components/SeoHead.svelte';
 	import { timeline as timelineAction } from '$lib/motion/actions/timeline';
 	import type { TimelineActionHandle } from '$lib/motion/actions/timeline';
@@ -81,7 +80,6 @@
 >
 	{#snippet head()}
 		<Figlet art={FIG} />
-		<Strip />
 	{/snippet}
 
 	<div class="tl">
