@@ -5,7 +5,6 @@
 	import Metric from '$lib/components/Metric.svelte';
 	import SeoHead from '$lib/components/SeoHead.svelte';
 	import Figlet from '$lib/components/Figlet.svelte';
-	import Strip from '$lib/components/Strip.svelte';
 	import { sky } from '$lib/motion/actions/sky';
 	import { buildLegacyRedirectScript } from '$lib/domain/redirects';
 	import type { PageData } from './$types';
@@ -43,7 +42,6 @@
 <Pane id="about" index={1} title="home" section="about" meta="bogotá · utc−5" headingLevel={1}>
 	{#snippet head()}
 		<Figlet art={FIG} />
-		<Strip />
 	{/snippet}
 
 	<div class="hero" bind:this={heroEl}>
